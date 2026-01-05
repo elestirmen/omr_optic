@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tarayıcı - OMRChecker</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <span class="logo">📋</span>
+            <span class="brand-text">OMRChecker</span>
+        </div>
+        <div class="nav-links">
+            <a href="index.html" class="nav-link">Ana Sayfa</a>
+            <a href="process.html" class="nav-link">OMR İşleme</a>
+            <a href="scanner.html" class="nav-link active">Tarayıcı</a>
+            <a href="templates.html" class="nav-link">Şablonlar</a>
+        </div>
+        <div class="nav-status">
+            <span class="status-indicator online"></span>
+            <span id="server-status">Bağlı</span>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="page-header">
+            <h1>🖨️ Tarayıcı Kontrolü</h1>
+            <p>Bağlı tarayıcıdan OMR formlarını tarayın ve işleyin</p>
+        </div>
+
+        <div class="scanner-layout">
+            <!-- Scanner Control Panel -->
+            <div class="panel scanner-panel">
+                <div class="panel-header">
+                    <h2>Tarayıcı Ayarları</h2>
+                    <button class="btn btn-sm btn-ghost" id="refresh-devices">
+                        🔄 Yenile
+                    </button>
+                </div>
+
+                <!-- Device Selection -->
+                <div class="form-group">
+                    <label for="device-select">Tarayıcı Seçin</label>
+                    <select id="device-select" class="form-control">
+                        <option value="">-- Cihaz aranıyor... --</option>
+                    </select>
+                </div>
+
+                <!-- Scanner Info -->
+                <div class="scanner-info" id="scanner-info">
+                    <div class="info-row">
+                        <span class="info-label">Platform:</span>
+                        <span class="info-value" id="platform-info">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Protokol:</span>
+                        <span class="info-value" id="protocol-info">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">ADF Desteği:</span>
+                        <span class="info-value" id="adf-info">-</span>
+                    </div>
+                </div>
+
+                <!-- Scan Options -->
+                <div class="scan-options">
+                    <h3>Tarama Seçenekleri</h3>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="use-adf" checked>
+                            <span class="checkmark"></span>
+                            Otomatik Belge Besleyici (ADF) Kullan
+                        </label>
+                        <small class="form-hint">Birden fazla sayfa için etkinleştirin</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="auto-process" checked>
+                            <span class="checkmark"></span>
+                            Tarama Sonrası Otomatik İşle
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="scan-template">İşleme Şablonu</label>
+                        <select id="scan-template" class="form-control">
+                            <option value="">-- Şablon Seçin --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Scan Button -->
+                <button class="btn btn-primary btn-block btn-lg" id="scan-btn">
+                    <span class="btn-icon">🖨️</span>
+                    Taramayı Başlat
+                </button>
+
+                <!-- Cancel Button (hidden by default) -->
+                <button class="btn btn-danger btn-block" id="cancel-btn" style="display:none;">
+                    <span class="btn-icon">⏹️</span>
+                    İptal Et
+                </button>
+            </div>
+
+            <!-- Scan Status & Preview -->
+            <div class="panel preview-panel">
+                <div class="panel-header">
+                    <h2>Tarama Durumu</h2>
+                </div>
+
+                <!-- Status Section -->
+                <div class="scan-status" id="scan-status">
+                    <div class="status-idle">
+                        <span class="status-icon">📄</span>
+                        <p>Tarama için hazır</p>
+                        <small>Tarayıcı seçin ve başlatın</small>
+                    </div>
+                </div>
+
+                <!-- Progress Section -->
+                <div class="scan-progress" id="scan-progress" style="display:none;">
+                    <div class="progress-ring">
+                        <svg viewBox="0 0 100 100">
+                            <circle class="progress-ring-bg" cx="50" cy="50" r="45" />
+                            <circle class="progress-ring-fill" cx="50" cy="50" r="45" id="progress-ring" />
+                        </svg>
+                        <span class="progress-number" id="pages-count">0</span>
+                    </div>
+                    <p class="progress-label">sayfa tarandı</p>
+                </div>
+
+                <!-- Scanned Pages Preview -->
+                <div class="scanned-pages" id="scanned-pages" style="display:none;">
+                    <h3>Taranan Sayfalar</h3>
+                    <div class="page-thumbnails" id="page-thumbnails"></div>
+                </div>
+
+                <!-- Results Section -->
+                <div class="scan-results" id="scan-results" style="display:none;">
+                    <div class="result-summary">
+                        <div class="summary-item">
+                            <span class="summary-number" id="total-scanned">0</span>
+                            <span class="summary-label">Sayfa Tarandı</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="summary-number" id="total-processed">0</span>
+                            <span class="summary-label">Form İşlendi</span>
+                        </div>
+                    </div>
+                    <div class="result-actions">
+                        <a href="#" class="btn btn-primary" id="view-results-btn">
+                            📊 Sonuçları Görüntüle
+                        </a>
+                        <button class="btn btn-outline" id="download-results-btn">
+                            📥 CSV İndir
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instructions -->
+        <section class="instructions">
+            <h2>Kullanım Talimatları</h2>
+            <div class="instruction-cards">
+                <div class="instruction-card">
+                    <span class="step-number">1</span>
+                    <h3>Tarayıcı Bağlayın</h3>
+                    <p>USB veya ağ üzerinden tarayıcınızı bağlayın</p>
+                </div>
+                <div class="instruction-card">
+                    <span class="step-number">2</span>
+                    <h3>Formları Yerleştirin</h3>
+                    <p>OMR formlarını ADF besleyiciye yerleştirin</p>
+                </div>
+                <div class="instruction-card">
+                    <span class="step-number">3</span>
+                    <h3>Taramayı Başlatın</h3>
+                    <p>Şablon seçin ve taramayı başlatın</p>
+                </div>
+                <div class="instruction-card">
+                    <span class="step-number">4</span>
+                    <h3>Sonuçları Alın</h3>
+                    <p>İşlenen sonuçları CSV olarak indirin</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="js/scanner.js"></script>
+</body>
+
+</html>

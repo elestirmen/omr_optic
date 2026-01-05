@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Şablon Editörü - OMRChecker</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        .editor-container {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 20px;
+            height: calc(100vh - 180px);
+        }
+
+        .canvas-panel {
+            background: #0f0f1a;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .canvas-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: #1a1a2e;
+            border-bottom: 1px solid #2a2a4a;
+            flex-wrap: wrap;
+        }
+
+        .toolbar-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .toolbar-divider {
+            width: 1px;
+            height: 24px;
+            background: #3a3a5a;
+            margin: 0 8px;
+        }
+
+        #canvas-container {
+            flex: 1;
+            overflow: auto;
+            padding: 20px;
+            position: relative;
+        }
+
+        .canvas-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        #template-canvas,
+        #overlay-canvas {
+            display: block;
+        }
+
+        #overlay-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: auto;
+            cursor: crosshair;
+        }
+
+        .side-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            overflow-y: auto;
+        }
+
+        .panel-section {
+            background: #16162a;
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid #2a2a4a;
+        }
+
+        .panel-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #a0a0b8;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .form-group {
+            margin-bottom: 12px;
+        }
+
+        .form-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            color: #6a6a8a;
+            margin-bottom: 4px;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 8px 12px;
+            background: #252540;
+            border: 1px solid #3a3a5a;
+            border-radius: 6px;
+            color: #ffffff;
+            font-size: 14px;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #6366f1;
+        }
+
+        .form-hint {
+            font-size: 11px;
+            color: #6a6a8a;
+            margin-top: 4px;
+        }
+
+        .blocks-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .block-item {
+            background: #252540;
+            padding: 10px 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .block-item:hover {
+            border-color: #6366f1;
+        }
+
+        .block-item.active {
+            border-color: #22d3ee;
+            background: #2a2a4a;
+        }
+
+        .block-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .block-name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .block-info {
+            display: flex;
+            gap: 8px;
+            margin-top: 4px;
+            font-size: 12px;
+            color: #6a6a8a;
+        }
+
+        .block-type {
+            background: #3a3a5a;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+
+        .delete-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+        }
+
+        .delete-btn:hover {
+            opacity: 1;
+        }
+
+        .empty-text {
+            color: #6a6a8a;
+            font-size: 13px;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .json-preview {
+            background: #0f0f1a;
+            border-radius: 6px;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 11px;
+            color: #6a6a8a;
+            max-height: 120px;
+            overflow: auto;
+            white-space: pre-wrap;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: #6366f1;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #818cf8;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: white;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 1px solid #3a3a5a;
+            color: #a0a0b8;
+        }
+
+        .btn-outline:hover {
+            border-color: #6366f1;
+            color: #ffffff;
+        }
+
+        .btn-block {
+            width: 100%;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 13px;
+        }
+
+        .toggle-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 44px;
+            height: 24px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #3a3a5a;
+            border-radius: 24px;
+            transition: 0.3s;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background: white;
+            border-radius: 50%;
+            transition: 0.3s;
+        }
+
+        input:checked+.toggle-slider {
+            background: #10b981;
+        }
+
+        input:checked+.toggle-slider:before {
+            transform: translateX(20px);
+        }
+
+        .coord-display {
+            font-family: monospace;
+            font-size: 13px;
+            color: #22d3ee;
+            background: #1a1a2e;
+            padding: 4px 10px;
+            border-radius: 4px;
+        }
+
+        .zoom-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #zoom-level {
+            font-size: 13px;
+            color: #a0a0b8;
+            min-width: 45px;
+            text-align: center;
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(99, 102, 241, 0.95);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 1000;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateX(-50%) translateY(20px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(-50%) translateY(0);
+                opacity: 1;
+            }
+        }
+
+        #block-form-panel {
+            display: none;
+        }
+    </style>
+</head>
+
+<body style="background: #0f0f1a; color: #ffffff; font-family: 'Inter', sans-serif;">
+    <!-- Simple Header -->
+    <header
+        style="padding: 16px 24px; background: #1a1a2e; border-bottom: 1px solid #2a2a4a; display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <a href="templates.html" style="color: #6a6a8a; text-decoration: none;">← Geri</a>
+            <span style="color: #3a3a5a;">|</span>
+            <span style="font-size: 18px; font-weight: 600;">📐 Şablon Editörü</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <input type="text" id="template-name" class="form-control" placeholder="Şablon adı..."
+                style="width: 200px;">
+            <button class="btn btn-success" onclick="saveTemplate()">💾 Kaydet</button>
+        </div>
+    </header>
+
+    <main style="padding: 20px;">
+        <div class="editor-container">
+            <!-- Canvas Panel -->
+            <div class="canvas-panel">
+                <div class="canvas-toolbar">
+                    <div class="toolbar-group">
+                        <button class="btn btn-outline btn-sm"
+                            onclick="document.getElementById('image-upload').click()">
+                            📷 Görüntü Yükle
+                        </button>
+                        <input type="file" id="image-upload" accept="image/*" hidden>
+                    </div>
+
+                    <div class="toolbar-divider"></div>
+
+                    <div class="toggle-group">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="selection-mode">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span style="font-size: 13px;">🎯 Alan Seç</span>
+                    </div>
+
+                    <div class="toolbar-divider"></div>
+
+                    <span class="coord-display" id="coord-display">X: 0, Y: 0</span>
+
+                    <div style="flex: 1;"></div>
+
+                    <div class="zoom-controls">
+                        <button class="btn btn-outline btn-sm" onclick="zoomOut()">➖</button>
+                        <span id="zoom-level">50%</span>
+                        <button class="btn btn-outline btn-sm" onclick="zoomIn()">➕</button>
+                    </div>
+                </div>
+
+                <div id="canvas-container">
+                    <div class="canvas-wrapper">
+                        <canvas id="template-canvas"></canvas>
+                        <canvas id="overlay-canvas"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Side Panel -->
+            <div class="side-panel">
+                <!-- Page Settings -->
+                <div class="panel-section">
+                    <div class="panel-title">📄 Sayfa Ayarları</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Genişlik (px)</label>
+                            <input type="number" id="page-width" class="form-control" value="1700">
+                        </div>
+                        <div class="form-group">
+                            <label>Yükseklik (px)</label>
+                            <input type="number" id="page-height" class="form-control" value="2400">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Kabarcık Boyutu (px)</label>
+                        <input type="number" id="bubble-size" class="form-control" value="25">
+                    </div>
+                </div>
+
+                <!-- Block Form -->
+                <div class="panel-section" id="block-form-panel">
+                    <div class="panel-title">📦 Alan Bloğu Ekle</div>
+                    <div id="block-form">
+                        <div class="form-group">
+                            <label>Blok Adı *</label>
+                            <input type="text" id="block-name" class="form-control" placeholder="Örn: Sorular_1_30">
+                        </div>
+
+                        <div class="form-group">
+                            <label>Alan Tipi</label>
+                            <select id="block-type" class="form-control">
+                                <option value="QTYPE_MCQ5">MCQ 5 Seçenek (A-E)</option>
+                                <option value="QTYPE_MCQ4">MCQ 4 Seçenek (A-D)</option>
+                                <option value="QTYPE_INT">Sayısal (0-9)</option>
+                                <option value="QTYPE_INT_FROM_1">Sayısal (1-0)</option>
+                                <option value="QTYPE_TR_ALPHABET">Türk Alfabesi (İsim/Soyisim)</option>
+                                <option value="CUSTOM">Özel</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Alan Etiketleri *</label>
+                            <input type="text" id="block-labels" class="form-control" placeholder="q1..30 veya ad1..12">
+                            <div class="form-hint">Örn: q1..30 (30 soru) | ad1..12 (12 harf) | tc1..11</div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Başlangıç X</label>
+                                <input type="number" id="block-origin-x" class="form-control" value="0">
+                            </div>
+                            <div class="form-group">
+                                <label>Başlangıç Y</label>
+                                <input type="number" id="block-origin-y" class="form-control" value="0">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Seçim Genişliği</label>
+                                <input type="number" id="selection-width" class="form-control" value="100">
+                            </div>
+                            <div class="form-group">
+                                <label>Seçim Yüksekliği</label>
+                                <input type="number" id="selection-height" class="form-control" value="100">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Kabarcık Sayısı</label>
+                                <input type="number" id="block-num-bubbles" class="form-control" value="5" min="1">
+                            </div>
+                            <div class="form-group">
+                                <label>Satır Sayısı</label>
+                                <input type="number" id="block-num-labels" class="form-control" value="10" min="1">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Kabarcık Aralığı</label>
+                                <input type="number" id="block-bubbles-gap" class="form-control" value="40">
+                            </div>
+                            <div class="form-group">
+                                <label>Satır Aralığı</label>
+                                <input type="number" id="block-labels-gap" class="form-control" value="50">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Yön</label>
+                            <select id="block-direction" class="form-control">
+                                <option value="horizontal">↔️ Yatay (A B C D E)</option>
+                                <option value="vertical">↕️ Dikey (seçenekler alta doğru)</option>
+                            </select>
+                        </div>
+
+                        <div style="display: flex; gap: 8px; margin-top: 16px;">
+                            <button class="btn btn-primary btn-block" onclick="addBlock()">✅ Ekle</button>
+                            <button class="btn btn-outline" onclick="resetForm()">İptal</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Blocks List -->
+                <div class="panel-section">
+                    <div class="panel-title">📋 Eklenen Alanlar</div>
+                    <div class="blocks-list" id="blocks-list">
+                        <p class="empty-text">Henüz alan eklenmedi.<br>Alan Seç modunu aktif edip görüntü üzerinde
+                            sürükleyin.</p>
+                    </div>
+                </div>
+
+                <!-- JSON Preview -->
+                <div class="panel-section">
+                    <div class="panel-title">📝 JSON Önizleme</div>
+                    <pre class="json-preview" id="json-preview">{}</pre>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/template-editor.js"></script>
+</body>
+
+</html>

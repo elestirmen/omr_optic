@@ -1,0 +1,84 @@
+{
+  "pageDimensions": [1800, 2400],
+  "bubbleDimensions": [22, 22],
+  "emptyValue": "",
+  "customLabels": {
+    "AdSoyad": ["name1..20"],
+    "TCKimlikNo": ["tc1..11"],
+    "OgrenciNo": ["ogr1..9"],
+    "Telefon": ["alan1..3", "tel1..7"]
+  },
+  "outputColumns": ["TCKimlikNo", "OgrenciNo", "AdSoyad", "kitapcik", "Telefon", "q1..120"],
+  "fieldBlocks": {
+    "AdSoyadBlock": {
+      "fieldType": "QTYPE_TR_ALPHABET",
+      "origin": [150, 220],
+      "bubbleDimensions": [18, 18],
+      "bubblesGap": 20,
+      "labelsGap": 24,
+      "fieldLabels": ["name1..20"]
+    },
+    "TCKimlikNoBlock": {
+      "fieldType": "QTYPE_INT",
+      "origin": [950, 420],
+      "bubblesGap": 24,
+      "labelsGap": 28,
+      "fieldLabels": ["tc1..11"]
+    },
+    "OgrenciNoBlock": {
+      "fieldType": "QTYPE_INT",
+      "origin": [1280, 420],
+      "bubblesGap": 24,
+      "labelsGap": 28,
+      "fieldLabels": ["ogr1..9"]
+    },
+    "KitapcikTuruBlock": {
+      "fieldType": "QTYPE_MCQ4",
+      "origin": [1320, 1280],
+      "bubblesGap": 34,
+      "labelsGap": 0,
+      "fieldLabels": ["kitapcik"]
+    },
+    "TelefonBlock": {
+      "fieldType": "QTYPE_INT",
+      "origin": [1200, 1450],
+      "bubblesGap": 24,
+      "labelsGap": 28,
+      "fieldLabels": ["alan1..3", "tel1..7"]
+    },
+    "Test_1_30": {
+      "fieldType": "QTYPE_MCQ5",
+      "origin": [150, 1250],
+      "bubblesGap": 32,
+      "labelsGap": 28,
+      "fieldLabels": ["q1..30"]
+    },
+    "Test_31_60": {
+      "fieldType": "QTYPE_MCQ5",
+      "origin": [450, 1250],
+      "bubblesGap": 32,
+      "labelsGap": 28,
+      "fieldLabels": ["q31..60"]
+    },
+    "Test_61_90": {
+      "fieldType": "QTYPE_MCQ5",
+      "origin": [750, 1250],
+      "bubblesGap": 32,
+      "labelsGap": 28,
+      "fieldLabels": ["q61..90"]
+    },
+    "Test_91_120": {
+      "fieldType": "QTYPE_MCQ5",
+      "origin": [1050, 1250],
+      "bubblesGap": 32,
+      "labelsGap": 28,
+      "fieldLabels": ["q91..120"]
+    }
+  },
+  "preProcessors": [
+    {
+      "name": "CropPage",
+      "options": { "morphKernel": [10, 10] }
+    }
+  ]
+}

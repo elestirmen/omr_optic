@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OMRChecker - Optik Okuyucu</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <span class="logo">📋</span>
+            <span class="brand-text">OMRChecker</span>
+        </div>
+        <div class="nav-links">
+            <a href="index.html" class="nav-link active">Ana Sayfa</a>
+            <a href="process.html" class="nav-link">OMR İşleme</a>
+            <a href="scanner.html" class="nav-link">Tarayıcı</a>
+            <a href="templates.html" class="nav-link">Şablonlar</a>
+        </div>
+        <div class="nav-status">
+            <span class="status-indicator online"></span>
+            <span id="server-status">Bağlı</span>
+        </div>
+    </nav>
+
+    <main class="container">
+        <!-- Hero Section -->
+        <section class="hero">
+            <div class="hero-content">
+                <h1>Optik Form Okuyucu</h1>
+                <p>Hızlı, doğru ve kolay OMR tarama sistemi</p>
+                <div class="hero-actions">
+                    <a href="process.html" class="btn btn-primary btn-lg">
+                        <span class="btn-icon">📄</span>
+                        Dosya Yükle
+                    </a>
+                    <a href="scanner.html" class="btn btn-secondary btn-lg">
+                        <span class="btn-icon">🖨️</span>
+                        Tarayıcıdan Oku
+                    </a>
+                </div>
+            </div>
+            <div class="hero-stats">
+                <div class="stat-card">
+                    <span class="stat-number" id="stat-processed">0</span>
+                    <span class="stat-label">Toplam İşlenen</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number" id="stat-today">0</span>
+                    <span class="stat-label">Bugün</span>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-number" id="stat-accuracy">%99</span>
+                    <span class="stat-label">Doğruluk</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Grid -->
+        <section class="features">
+            <h2 class="section-title">Özellikler</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🎯</div>
+                    <h3>Yüksek Doğruluk</h3>
+                    <p>%99+ doğruluk oranı ile güvenilir sonuçlar</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Hızlı İşleme</h3>
+                    <p>Dakikada 200+ form işleme kapasitesi</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🖨️</div>
+                    <h3>Tarayıcı Desteği</h3>
+                    <p>ADF destekli tarayıcılardan toplu okuma</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📱</div>
+                    <h3>Mobil Uyumlu</h3>
+                    <p>Telefonla çekilen fotoğrafları da işler</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🎨</div>
+                    <h3>Esnek Şablonlar</h3>
+                    <p>Kendi formlarınız için özel şablon oluşturun</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Excel Çıktısı</h3>
+                    <p>Sonuçları CSV/Excel olarak indirin</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Quick Actions -->
+        <section class="quick-actions">
+            <h2 class="section-title">Hızlı İşlemler</h2>
+            <div class="action-cards">
+                <div class="action-card" onclick="location.href='process.html'">
+                    <div class="action-icon">📤</div>
+                    <div class="action-content">
+                        <h3>Dosya Yükle</h3>
+                        <p>OMR formlarını sürükle-bırak ile yükle</p>
+                    </div>
+                    <span class="action-arrow">→</span>
+                </div>
+                <div class="action-card" onclick="location.href='scanner.html'">
+                    <div class="action-icon">🖨️</div>
+                    <div class="action-content">
+                        <h3>Tarayıcı Kullan</h3>
+                        <p>Bağlı tarayıcıdan otomatik tara ve işle</p>
+                    </div>
+                    <span class="action-arrow">→</span>
+                </div>
+                <div class="action-card" onclick="location.href='templates.html'">
+                    <div class="action-icon">📝</div>
+                    <div class="action-content">
+                        <h3>Şablon Yönetimi</h3>
+                        <p>Şablonları görüntüle ve düzenle</p>
+                    </div>
+                    <span class="action-arrow">→</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Recent Activity -->
+        <section class="recent-activity">
+            <h2 class="section-title">Son İşlemler</h2>
+            <div class="activity-list" id="activity-list">
+                <div class="activity-empty">
+                    <span class="empty-icon">📋</span>
+                    <p>Henüz işlem yapılmadı</p>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <p>OMRChecker Web Interface v1.0 | <a href="https://github.com/Udayraj123/OMRChecker" target="_blank">GitHub</a></p>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

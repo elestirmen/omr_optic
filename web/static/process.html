@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OMR İşleme - OMRChecker</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <span class="logo">📋</span>
+            <span class="brand-text">OMRChecker</span>
+        </div>
+        <div class="nav-links">
+            <a href="index.html" class="nav-link">Ana Sayfa</a>
+            <a href="process.html" class="nav-link active">OMR İşleme</a>
+            <a href="scanner.html" class="nav-link">Tarayıcı</a>
+            <a href="templates.html" class="nav-link">Şablonlar</a>
+        </div>
+        <div class="nav-status">
+            <span class="status-indicator online"></span>
+            <span id="server-status">Bağlı</span>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="page-header">
+            <h1>OMR Formlarını İşle</h1>
+            <p>Form görüntülerini yükleyin ve sonuçları alın</p>
+        </div>
+
+        <div class="process-layout">
+            <!-- Left Panel - Upload & Settings -->
+            <div class="panel upload-panel">
+                <div class="panel-header">
+                    <h2>📤 Dosya Yükleme</h2>
+                </div>
+
+                <!-- Template Selection -->
+                <div class="form-group">
+                    <label for="template-select">Şablon Seçin</label>
+                    <select id="template-select" class="form-control">
+                        <option value="">-- Şablon Seçin --</option>
+                    </select>
+                </div>
+
+                <!-- Drop Zone -->
+                <div class="dropzone" id="dropzone">
+                    <div class="dropzone-content">
+                        <span class="dropzone-icon">📁</span>
+                        <p class="dropzone-text">Dosyaları sürükleyip bırakın</p>
+                        <p class="dropzone-hint">veya</p>
+                        <button class="btn btn-outline" onclick="document.getElementById('file-input').click()">
+                            Dosya Seç
+                        </button>
+                        <input type="file" id="file-input" multiple accept="image/*" hidden>
+                    </div>
+                </div>
+
+                <!-- File List -->
+                <div class="file-list" id="file-list">
+                    <div class="file-list-header">
+                        <span>Yüklenen Dosyalar</span>
+                        <button class="btn btn-sm btn-ghost" id="clear-files" style="display:none;">Temizle</button>
+                    </div>
+                    <div class="file-items" id="file-items"></div>
+                </div>
+
+                <!-- Process Button -->
+                <button class="btn btn-primary btn-block" id="process-btn" disabled>
+                    <span class="btn-icon">⚙️</span>
+                    İşlemeyi Başlat
+                </button>
+            </div>
+
+            <!-- Right Panel - Results -->
+            <div class="panel results-panel">
+                <div class="panel-header">
+                    <h2>📊 Sonuçlar</h2>
+                    <div class="panel-actions">
+                        <button class="btn btn-sm btn-outline" id="download-csv" disabled>
+                            <span class="btn-icon">📥</span> CSV İndir
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Progress -->
+                <div class="progress-section" id="progress-section" style="display:none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+                    </div>
+                    <p class="progress-text" id="progress-text">İşleniyor...</p>
+                </div>
+
+                <!-- Results Container -->
+                <div class="results-container" id="results-container">
+                    <div class="results-empty">
+                        <span class="empty-icon">📋</span>
+                        <p>Dosya yükleyip işlemeyi başlatın</p>
+                    </div>
+                </div>
+
+                <!-- Results Table -->
+                <div class="results-table-container" id="results-table-container" style="display:none;">
+                    <table class="results-table" id="results-table">
+                        <thead>
+                            <tr id="results-header"></tr>
+                        </thead>
+                        <tbody id="results-body"></tbody>
+                    </table>
+                </div>
+
+                <!-- Processed Images -->
+                <div class="processed-images" id="processed-images" style="display:none;">
+                    <h3>İşlenmiş Görüntüler</h3>
+                    <div class="image-grid" id="image-grid"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Image Preview Modal -->
+    <div class="modal" id="image-modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal()">&times;</span>
+            <img id="modal-image" src="" alt="Preview">
+        </div>
+    </div>
+
+    <script src="js/process.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Şablonlar - OMRChecker</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <span class="logo">📋</span>
+            <span class="brand-text">OMRChecker</span>
+        </div>
+        <div class="nav-links">
+            <a href="index.html" class="nav-link">Ana Sayfa</a>
+            <a href="process.html" class="nav-link">OMR İşleme</a>
+            <a href="scanner.html" class="nav-link">Tarayıcı</a>
+            <a href="templates.html" class="nav-link active">Şablonlar</a>
+        </div>
+        <div class="nav-status">
+            <span class="status-indicator online"></span>
+            <span id="server-status">Bağlı</span>
+        </div>
+    </nav>
+
+    <main class="container">
+        <div class="page-header">
+            <h1>📝 Şablon Yönetimi</h1>
+            <p>OMR form şablonlarını görüntüleyin ve yönetin</p>
+        </div>
+
+        <!-- Template List -->
+        <section class="templates-section">
+            <div class="section-header">
+                <h2>Mevcut Şablonlar</h2>
+                <button class="btn btn-primary" id="create-template-btn">
+                    <span class="btn-icon">➕</span>
+                    Yeni Şablon
+                </button>
+            </div>
+
+            <div class="template-grid" id="template-grid">
+                <!-- Templates will be loaded here -->
+                <div class="loading-spinner">
+                    <div class="spinner"></div>
+                    <p>Şablonlar yükleniyor...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Template Details Modal -->
+        <div class="modal" id="template-modal">
+            <div class="modal-content modal-lg">
+                <div class="modal-header">
+                    <h2 id="template-name">Şablon Detayları</h2>
+                    <span class="modal-close" onclick="closeTemplateModal()">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <div class="template-details">
+                        <div class="detail-section">
+                            <h3>Sayfa Boyutları</h3>
+                            <div class="detail-row">
+                                <span>Genişlik:</span>
+                                <span id="detail-width">-</span>
+                            </div>
+                            <div class="detail-row">
+                                <span>Yükseklik:</span>
+                                <span id="detail-height">-</span>
+                            </div>
+                        </div>
+                        <div class="detail-section">
+                            <h3>Kabarcık Boyutları</h3>
+                            <div class="detail-row">
+                                <span>Genişlik:</span>
+                                <span id="detail-bubble-width">-</span>
+                            </div>
+                            <div class="detail-row">
+                                <span>Yükseklik:</span>
+                                <span id="detail-bubble-height">-</span>
+                            </div>
+                        </div>
+                        <div class="detail-section">
+                            <h3>Alan Blokları</h3>
+                            <div class="blocks-list" id="blocks-list"></div>
+                        </div>
+                        <div class="detail-section">
+                            <h3>Ön İşlemciler</h3>
+                            <div class="processors-list" id="processors-list"></div>
+                        </div>
+                    </div>
+                    <div class="template-json">
+                        <h3>JSON Yapısı</h3>
+                        <pre id="template-json-content"></pre>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-outline" onclick="closeTemplateModal()">Kapat</button>
+                    <button class="btn btn-primary" id="use-template-btn">
+                        Bu Şablonu Kullan
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/templates.js"></script>
+</body>
+
+</html>

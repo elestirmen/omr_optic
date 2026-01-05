@@ -1,0 +1,191 @@
+{
+    "pageDimensions": [
+        1654,
+        2339
+    ],
+    "bubbleDimensions": [
+        24,
+        24
+    ],
+    "preProcessors": [
+        {
+            "name": "CropPage",
+            "options": {
+                "morphKernel": [
+                    10,
+                    10
+                ]
+            }
+        }
+    ],
+    "customLabels": {
+        "TC_Kimlik": [
+            "tc1..11"
+        ],
+        "Ogrenci_No": [
+            "ogrenci1..7"
+        ],
+        "Telefon": [
+            "tel1..11"
+        ]
+    },
+    "fieldBlocks": {
+        "Soyadi_Adi_1": {
+            "fieldType": "QTYPE_TR_ALPHABET",
+            "fieldLabels": [
+                "ad1..12"
+            ],
+            "origin": [
+                58,
+                85
+            ],
+            "bubblesGap": 18,
+            "labelsGap": 27,
+            "direction": "vertical"
+        },
+        "Soyadi_Adi_2": {
+            "fieldType": "QTYPE_TR_ALPHABET",
+            "fieldLabels": [
+                "ad13..24"
+            ],
+            "origin": [
+                382,
+                85
+            ],
+            "bubblesGap": 18,
+            "labelsGap": 27,
+            "direction": "vertical"
+        },
+        "TC_Kimlik_No": {
+            "fieldType": "QTYPE_INT",
+            "fieldLabels": [
+                "tc1..11"
+            ],
+            "origin": [
+                780,
+                138
+            ],
+            "bubblesGap": 18,
+            "labelsGap": 26,
+            "direction": "vertical"
+        },
+        "Ogrenci_No": {
+            "fieldType": "QTYPE_INT",
+            "fieldLabels": [
+                "ogrenci1..7"
+            ],
+            "origin": [
+                1050,
+                138
+            ],
+            "bubblesGap": 18,
+            "labelsGap": 26,
+            "direction": "vertical"
+        },
+        "Test_1_30": {
+            "fieldType": "QTYPE_MCQ5",
+            "fieldLabels": [
+                "q1..30"
+            ],
+            "origin": [
+                58,
+                720
+            ],
+            "bubblesGap": 28,
+            "labelsGap": 23,
+            "direction": "horizontal"
+        },
+        "Test_31_60": {
+            "fieldType": "QTYPE_MCQ5",
+            "fieldLabels": [
+                "q31..60"
+            ],
+            "origin": [
+                245,
+                720
+            ],
+            "bubblesGap": 28,
+            "labelsGap": 23,
+            "direction": "horizontal"
+        },
+        "Test_61_90": {
+            "fieldType": "QTYPE_MCQ5",
+            "fieldLabels": [
+                "q61..90"
+            ],
+            "origin": [
+                445,
+                720
+            ],
+            "bubblesGap": 28,
+            "labelsGap": 23,
+            "direction": "horizontal"
+        },
+        "Test_91_120": {
+            "fieldType": "QTYPE_MCQ5",
+            "fieldLabels": [
+                "q91..120"
+            ],
+            "origin": [
+                645,
+                720
+            ],
+            "bubblesGap": 28,
+            "labelsGap": 23,
+            "direction": "horizontal"
+        },
+        "Kitapcik_Turu": {
+            "bubbleValues": [
+                "A",
+                "B",
+                "C",
+                "D"
+            ],
+            "fieldLabels": [
+                "kitapcik"
+            ],
+            "origin": [
+                960,
+                695
+            ],
+            "bubblesGap": 32,
+            "labelsGap": 0,
+            "direction": "horizontal"
+        },
+        "Alan_Kodu": {
+            "fieldType": "QTYPE_INT",
+            "fieldLabels": [
+                "alan1..3"
+            ],
+            "origin": [
+                920,
+                780
+            ],
+            "bubblesGap": 18,
+            "labelsGap": 28,
+            "direction": "vertical"
+        },
+        "Telefon_No": {
+            "fieldType": "QTYPE_INT",
+            "fieldLabels": [
+                "tel1..11"
+            ],
+            "origin": [
+                1050,
+                780
+            ],
+            "bubblesGap": 18,
+            "labelsGap": 26,
+            "direction": "vertical"
+        }
+    },
+    "outputColumns": [
+        "ad1..24",
+        "tc1..11",
+        "ogrenci1..7",
+        "kitapcik",
+        "q1..120",
+        "alan1..3",
+        "tel1..11"
+    ]
+}
