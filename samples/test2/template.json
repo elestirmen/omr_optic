@@ -8,17 +8,17 @@
     25
   ],
   "fieldBlocks": {
-    "ogrenci_no": {
+    "o": {
       "fieldType": "QTYPE_INT",
       "fieldLabels": [
-        "ogrenci_no1..10"
+        "o"
       ],
       "origin": [
-        1791,
-        910
+        1787,
+        906
       ],
-      "bubblesGap": 50,
-      "labelsGap": 50,
+      "bubblesGap": 51,
+      "labelsGap": 51,
       "direction": "horizontal"
     }
   }

@@ -5,6 +5,7 @@
 const API_BASE = '';
 let uploadedFiles = [];
 let sessionId = null;
+let templateFromUrl = null;
 
 // DOM Elements
 const dropzone = document.getElementById('dropzone');
@@ -24,11 +25,11 @@ const imageGrid = document.getElementById('image-grid');
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+    checkUrlParams();
     loadTemplates();
     setupDropzone();
     setupFileInput();
     setupButtons();
-    checkUrlParams();
 });
 
 // Load templates
@@ -45,6 +46,13 @@ async function loadTemplates() {
                 option.textContent = template.name;
                 templateSelect.appendChild(option);
             });
+
+            // Preselect from URL, otherwise default to "kapadokya" if available.
+            if (templateFromUrl) {
+                templateSelect.value = templateFromUrl;
+            } else if (templateSelect.querySelector('option[value=\"kapadokya\"]')) {
+                templateSelect.value = 'kapadokya';
+            }
         }
     } catch (error) {
         console.error('Error loading templates:', error);
@@ -308,10 +316,18 @@ function downloadCSV() {
 function checkUrlParams() {
     const params = new URLSearchParams(window.location.search);
     const session = params.get('session');
+    const template = params.get('template');
 
     if (session) {
         sessionId = session;
         loadSessionResults(session);
+    }
+
+    if (template) {
+        templateFromUrl = template;
+        if (templateSelect?.options?.length) {
+            templateSelect.value = templateFromUrl;
+        }
     }
 }
 

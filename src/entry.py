@@ -89,6 +89,10 @@ def process_dir(
     if os.path.exists(local_config_path):
         tuning_config = open_config_with_defaults(local_config_path)
 
+    # Override config from CLI flags
+    if args.get("autoAlign"):
+        tuning_config.alignment_params.auto_align = True
+
     # Update local template (in current recursion stack)
     local_template_path = curr_dir.joinpath(TEMPLATE_FILENAME)
     local_template_exists = os.path.exists(local_template_path)
@@ -104,7 +108,14 @@ def process_dir(
     paths = Paths(output_dir)
 
     # look for images in current dir to process
-    exts = ("*.[pP][nN][gG]", "*.[jJ][pP][gG]", "*.[jJ][pP][eE][gG]")
+    exts = (
+        "*.[pP][nN][gG]",
+        "*.[jJ][pP][gG]",
+        "*.[jJ][pP][eE][gG]",
+        "*.[bB][mM][pP]",
+        "*.[tT][iI][fF]",
+        "*.[tT][iI][fF][fF]",
+    )
     omr_files = sorted([f for ext in exts for f in curr_dir.glob(ext)])
 
     # Exclude images (take union over all pre_processors)
@@ -140,7 +151,7 @@ def process_dir(
                 appropriate directory."
             )
             raise Exception(
-                f"No template file found in the directory tree of {curr_dir}"
+                f"No template file found in the directory tree of {curr_dir.as_posix()}"
             )
 
         setup_dirs_for_paths(paths)
@@ -240,8 +251,8 @@ def process_files(
             if check_and_move(ERROR_CODES.NO_MARKER_ERR, file_path, new_file_path):
                 err_line = [
                     file_name,
-                    file_path,
-                    new_file_path,
+                    file_path.as_posix(),
+                    new_file_path.as_posix(),
                     "NA",
                 ] + outputs_namespace.empty_resp
                 pd.DataFrame(err_line, dtype=str).T.to_csv(
@@ -310,7 +321,12 @@ def process_files(
             STATS.files_not_moved += 1
             new_file_path = save_dir.joinpath(file_id)
             # Enter into Results sheet-
-            results_line = [file_name, file_path, new_file_path, score] + resp_array
+            results_line = [
+                file_name,
+                file_path.as_posix(),
+                new_file_path.as_posix(),
+                score,
+            ] + resp_array
             # Write/Append to results_line file(opened in append mode)
             pd.DataFrame(results_line, dtype=str).T.to_csv(
                 outputs_namespace.files_obj["Results"],
@@ -324,7 +340,12 @@ def process_files(
             logger.info(f"[{files_counter}] Found multi-marked file: '{file_id}'")
             new_file_path = outputs_namespace.paths.multi_marked_dir.joinpath(file_name)
             if check_and_move(ERROR_CODES.MULTI_BUBBLE_WARN, file_path, new_file_path):
-                mm_line = [file_name, file_path, new_file_path, "NA"] + resp_array
+                mm_line = [
+                    file_name,
+                    file_path.as_posix(),
+                    new_file_path.as_posix(),
+                    "NA",
+                ] + resp_array
                 pd.DataFrame(mm_line, dtype=str).T.to_csv(
                     outputs_namespace.files_obj["MultiMarked"],
                     mode="a",

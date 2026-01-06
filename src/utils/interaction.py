@@ -6,13 +6,19 @@ from screeninfo import get_monitors
 from src.logger import logger
 from src.utils.image import ImageUtils
 
-monitor_window = get_monitors()[0]
+try:
+    monitor_window = get_monitors()[0]
+    _DEFAULT_WINDOW_WIDTH = monitor_window.width
+    _DEFAULT_WINDOW_HEIGHT = monitor_window.height
+except Exception:
+    _DEFAULT_WINDOW_WIDTH = 1920
+    _DEFAULT_WINDOW_HEIGHT = 1080
 
 
 @dataclass
 class ImageMetrics:
     # TODO: Move TEXT_SIZE, etc here and find a better class name
-    window_width, window_height = monitor_window.width, monitor_window.height
+    window_width, window_height = _DEFAULT_WINDOW_WIDTH, _DEFAULT_WINDOW_HEIGHT
     # for positioning image windows
     window_x, window_y = 0, 0
     reset_pos = [0, 0]
@@ -38,20 +44,28 @@ class InteractionUtils:
         else:
             img = origin
 
-        if not is_window_available(name):
-            cv2.namedWindow(name)
+        try:
+            if not is_window_available(name):
+                cv2.namedWindow(name)
 
-        cv2.imshow(name, img)
+            cv2.imshow(name, img)
 
-        if reset_pos:
-            image_metrics.window_x = reset_pos[0]
-            image_metrics.window_y = reset_pos[1]
+            if reset_pos:
+                image_metrics.window_x = reset_pos[0]
+                image_metrics.window_y = reset_pos[1]
 
-        cv2.moveWindow(
-            name,
-            image_metrics.window_x,
-            image_metrics.window_y,
-        )
+            try:
+                cv2.moveWindow(
+                    name,
+                    image_metrics.window_x,
+                    image_metrics.window_y,
+                )
+            except cv2.error:
+                # Headless / missing GUI backend: don't crash the pipeline.
+                return
+        except cv2.error:
+            # Headless / missing GUI backend: don't crash the pipeline.
+            return
 
         h, w = img.shape[:2]
 
@@ -100,8 +114,8 @@ def wait_q():
 def is_window_available(name: str) -> bool:
     """Checks if a window is available"""
     try:
-        cv2.getWindowProperty(name, cv2.WND_PROP_VISIBLE)
-        return True
+        # returns -1 when not found
+        return cv2.getWindowProperty(name, cv2.WND_PROP_VISIBLE) >= 0
     except Exception as e:
-        print(e)
+        logger.debug(e)
         return False

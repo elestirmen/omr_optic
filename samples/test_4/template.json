@@ -1,0 +1,34 @@
+{
+  "pageDimensions": [
+    2481,
+    3506
+  ],
+  "bubbleDimensions": [
+    25,
+    25
+  ],
+  "fieldBlocks": {
+    "test_4": {
+      "fieldType": "QTYPE_INT",
+      "fieldLabels": [
+        "ogrenci1..7"
+      ],
+      "origin": [
+        1792,
+        909
+      ],
+      "bubblesGap": 54,
+      "labelsGap": 50,
+      "direction": "vertical"
+    }
+  },
+  "preProcessors": [],
+  "customLabels": {
+    "Ogrenci_No": [
+      "ogrenci1..7"
+    ]
+  },
+  "outputColumns": [
+    "Ogrenci_No"
+  ]
+}

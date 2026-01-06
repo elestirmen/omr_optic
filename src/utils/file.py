@@ -2,7 +2,7 @@ import argparse
 import json
 import os
 from csv import QUOTE_NONNUMERIC
-from time import localtime, strftime
+from time import gmtime, strftime
 
 import pandas as pd
 
@@ -11,7 +11,9 @@ from src.logger import logger
 
 def load_json(path, **rest):
     try:
-        with open(path, "r") as f:
+        # Read JSON as UTF-8 (and tolerate UTF-8 BOM) so Windows editors like Notepad
+        # don't break parsing.
+        with open(path, "r", encoding="utf-8-sig") as f:
             loaded = json.load(f, **rest)
     except json.decoder.JSONDecodeError as error:
         logger.critical(f"Error when loading json file at: '{path}'\n{error}")
@@ -68,9 +70,10 @@ def setup_outputs_for_template(paths, template):
     ] + template.output_columns
     ns.OUTPUT_SET = []
     ns.files_obj = {}
-    TIME_NOW_HRS = strftime("%I%p", localtime())
+    # Use UTC timestamp for deterministic file naming (also avoids timezone-dependent test failures).
+    TIME_NOW = strftime("%Y%m%d_%H%M%S", gmtime())
     ns.filesMap = {
-        "Results": os.path.join(paths.results_dir, f"Results_{TIME_NOW_HRS}.csv"),
+        "Results": os.path.join(paths.results_dir, f"Results_{TIME_NOW}.csv"),
         "MultiMarked": os.path.join(paths.manual_dir, "MultiMarkedFiles.csv"),
         "Errors": os.path.join(paths.manual_dir, "ErrorFiles.csv"),
     }
@@ -90,6 +93,6 @@ def setup_outputs_for_template(paths, template):
             )
         else:
             logger.info(f"Present : appending to '{file_name}'")
-            ns.files_obj[file_key] = open(file_name, "a")
+            ns.files_obj[file_key] = file_name
 
     return ns

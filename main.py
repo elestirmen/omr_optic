@@ -36,7 +36,7 @@ def parse_args():
         "--debug",
         required=False,
         dest="debug",
-        action="store_false",
+        action="store_true",
         help="Enables debugging mode for showing detailed errors",
     )
 
@@ -84,7 +84,11 @@ def parse_args():
 
 
 def entry_point_for_args(args):
-    if args["debug"] is True:
+    if args.get("debug"):
+        # Enable full tracebacks
+        if hasattr(sys, "tracebacklimit"):
+            del sys.tracebacklimit
+    else:
         # Disable tracebacks
         sys.tracebacklimit = 0
     for root in args["input_paths"]:

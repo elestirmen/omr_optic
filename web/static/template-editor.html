@@ -364,6 +364,76 @@
         #block-form-panel {
             display: none;
         }
+
+        .preset-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .preset-buttons .btn {
+            flex: 1 1 auto;
+            min-width: 120px;
+        }
+
+        .mode-banner {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 10px 12px;
+            border: 1px solid #2a2a4a;
+            border-radius: 10px;
+            background: #1a1a2e;
+            margin-bottom: 12px;
+        }
+
+        .mode-left {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            min-width: 0;
+        }
+
+        .mode-badge {
+            display: inline-flex;
+            align-items: center;
+            height: 20px;
+            padding: 0 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            user-select: none;
+            flex: 0 0 auto;
+        }
+
+        .mode-badge.add {
+            background: rgba(99, 102, 241, 0.15);
+            color: #a5b4fc;
+            border: 1px solid rgba(99, 102, 241, 0.35);
+        }
+
+        .mode-badge.edit {
+            background: rgba(34, 211, 238, 0.15);
+            color: #67e8f9;
+            border: 1px solid rgba(34, 211, 238, 0.35);
+        }
+
+        .mode-title {
+            font-size: 13px;
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 250px;
+        }
+
+        .mode-subtitle {
+            font-size: 12px;
+            color: #6a6a8a;
+            margin-top: 2px;
+        }
     </style>
 </head>
 
@@ -448,9 +518,46 @@
                     </div>
                 </div>
 
+                <!-- Tips -->
+                <div class="panel-section">
+                    <div class="panel-title">💡 İpuçları</div>
+                    <div class="form-hint">
+                        1) 📷 Görüntü yükle<br>
+                        2) 🎯 Alan Seç açıkken sürükle-bırak ile alanı seç<br>
+                        3) 🎯 Kapalıyken bloklara tıkla-sürükle; ok tuşlarıyla ince ayar (Shift=5px)<br>
+                        4) 🔁 Test bloklarını “Hızlı Çoğaltma” ile kopyala (q1..30 → q31..60 gibi)<br>
+                        5) 🔗 Öğrenci no/TC gibi alanları “Birleştirilmiş Alanlar” ile tek sütun yap
+                    </div>
+                </div>
+
+                <!-- Quick Presets -->
+                <div class="panel-section">
+                    <div class="panel-title">Hızlı Alanlar</div>
+                    <div class="preset-buttons">
+                        <button class="btn btn-outline btn-sm" onclick="applyPreset('ogrenci7')">Öğrenci No (7)</button>
+                        <button class="btn btn-outline btn-sm" onclick="applyPreset('tc11')">TC Kimlik (11)</button>
+                        <button class="btn btn-outline btn-sm" onclick="applyPreset('ad12')">Ad/Soyad (12)</button>
+                        <button class="btn btn-outline btn-sm" onclick="applyPreset('test30')">Test (1-30)</button>
+                        <button class="btn btn-outline btn-sm" onclick="applyPreset('kitapcik')">Kitapçık</button>
+                    </div>
+                    <div class="form-hint">Önce bir preset seçin, sonra görüntü üzerinde alanı sürükleyip bırakın.</div>
+                </div>
+
                 <!-- Block Form -->
                 <div class="panel-section" id="block-form-panel">
-                    <div class="panel-title">📦 Alan Bloğu Ekle</div>
+                    <div class="panel-title" id="block-form-title">Alan Bloğu (Ekle)</div>
+                    <div class="mode-banner" id="mode-banner">
+                        <div class="mode-left">
+                            <span class="mode-badge add" id="mode-badge">YENİ</span>
+                            <div style="min-width: 0;">
+                                <div class="mode-title" id="mode-title">Yeni alan ekleme</div>
+                                <div class="mode-subtitle" id="mode-subtitle">
+                                    Alan seçip ad/etiket girin ve "Ekle"ye basın.
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="startNewBlock()">Yeni Alan</button>
+                    </div>
                     <div id="block-form">
                         <div class="form-group">
                             <label>Blok Adı *</label>
@@ -469,10 +576,16 @@
                             </select>
                         </div>
 
+                        <div class="form-group" id="custom-values-group" style="display: none;">
+                            <label>Kabarcik Degerleri (virgul ile)</label>
+                            <input type="text" id="custom-bubble-values" class="form-control" value="A,B,C,D">
+                            <div class="form-hint">Orn: A,B,C,D | 0,1,2,3,4,5,6,7,8,9 | E,H</div>
+                        </div>
+
                         <div class="form-group">
                             <label>Alan Etiketleri *</label>
                             <input type="text" id="block-labels" class="form-control" placeholder="q1..30 veya ad1..12">
-                            <div class="form-hint">Örn: q1..30 (30 soru) | ad1..12 (12 harf) | tc1..11</div>
+                            <div class="form-hint">Örn: q1..30 (30 soru) | ad1..12 (12 harf) | tc1..11 | ogrenci1..7</div>
                         </div>
 
                         <div class="form-row">
@@ -519,6 +632,15 @@
                             </div>
                         </div>
 
+                        <div class="toggle-group" style="margin-top: 6px;">
+                            <label class="toggle-switch">
+                                <input type="checkbox" id="auto-gap" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span style="font-size: 13px;">Otomatik aralık hesabı</span>
+                        </div>
+                        <div class="form-hint">Açıksa etiket aralığı (q1..30 gibi) değişince aralıklar yeniden hesaplanır. Manuel ayarlarsanız otomatik kapanır.</div>
+
                         <div class="form-group">
                             <label>Yön</label>
                             <select id="block-direction" class="form-control">
@@ -528,8 +650,34 @@
                         </div>
 
                         <div style="display: flex; gap: 8px; margin-top: 16px;">
-                            <button class="btn btn-primary btn-block" onclick="addBlock()">✅ Ekle</button>
+                            <button class="btn btn-primary btn-block" id="save-block-btn" onclick="saveBlock()">Ekle</button>
                             <button class="btn btn-outline" onclick="resetForm()">İptal</button>
+                        </div>
+
+                        <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid #2a2a4a;">
+                            <div class="panel-title" style="margin-bottom: 10px;">🔁 Hızlı Çoğaltma</div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Ek Kopya</label>
+                                    <input type="number" id="dup-count" class="form-control" value="0" min="0" max="20">
+                                </div>
+                                <div class="form-group">
+                                    <label>Etiket Kaydır</label>
+                                    <input type="number" id="dup-label-step" class="form-control" value="0" min="0">
+                                </div>
+                            </div>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>ΔX</label>
+                                    <input type="number" id="dup-offset-x" class="form-control" value="0">
+                                </div>
+                                <div class="form-group">
+                                    <label>ΔY</label>
+                                    <input type="number" id="dup-offset-y" class="form-control" value="0">
+                                </div>
+                            </div>
+                            <button class="btn btn-outline btn-block" onclick="duplicateActiveBlock()">Çoğalt</button>
+                            <div class="form-hint">Örn: Test_1_30 bloğunda Ek Kopya=3, ΔX=190, Etiket Kaydır=30.</div>
                         </div>
                     </div>
                 </div>
@@ -541,6 +689,22 @@
                         <p class="empty-text">Henüz alan eklenmedi.<br>Alan Seç modunu aktif edip görüntü üzerinde
                             sürükleyin.</p>
                     </div>
+                </div>
+
+                <!-- Custom Labels -->
+                <div class="panel-section">
+                    <div class="panel-title">🔗 Birleştirilmiş Alanlar (CSV)</div>
+                    <div class="form-group">
+                        <label>Alan Adı</label>
+                        <input type="text" id="custom-label-name" class="form-control" placeholder="Örn: Ogrenci_No">
+                    </div>
+                    <div class="form-group">
+                        <label>Etiketler</label>
+                        <input type="text" id="custom-label-fields" class="form-control" placeholder="Örn: ogrenci1..7">
+                        <div class="form-hint">Virgül ile birden fazla: ad1..12,ad13..24</div>
+                    </div>
+                    <button class="btn btn-outline btn-block" onclick="addCustomLabel()">Ekle</button>
+                    <div class="blocks-list" id="custom-label-list"></div>
                 </div>
 
                 <!-- JSON Preview -->

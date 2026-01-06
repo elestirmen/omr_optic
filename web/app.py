@@ -43,7 +43,7 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # Initialize services
 omr_service = OMRService(UPLOAD_FOLDER, RESULTS_FOLDER)
-scanner_service = ScannerService(UPLOAD_FOLDER, socketio)
+scanner_service = ScannerService(UPLOAD_FOLDER, socketio, omr_service=omr_service)
 
 
 def allowed_file(filename):
@@ -157,17 +157,29 @@ def get_results(session_id):
 def download_csv(session_id):
     """Download results as CSV"""
     try:
-        csv_path = omr_service.get_csv_path(session_id)
+        kind = request.args.get("kind")
+        csv_path = (
+            omr_service.get_csv_path_by_kind(session_id, kind)
+            if kind
+            else omr_service.get_csv_path(session_id)
+        )
         return send_file(csv_path, as_attachment=True, download_name=f'results_{session_id}.csv')
     except FileNotFoundError:
         return jsonify({'error': 'Results not found'}), 404
 
 
-@app.route('/api/results/<session_id>/image/<filename>', methods=['GET'])
+@app.route('/api/results/<session_id>/image/<path:filename>', methods=['GET'])
 def get_result_image(session_id, filename):
     """Get processed image with markings"""
     result_folder = RESULTS_FOLDER / session_id
     return send_from_directory(str(result_folder), filename)
+
+
+@app.route('/api/uploads/<session_id>/file/<path:filename>', methods=['GET'])
+def get_upload_file(session_id, filename):
+    """Get a raw uploaded/scanned file (for previews)."""
+    session_folder = UPLOAD_FOLDER / session_id
+    return send_from_directory(str(session_folder), filename)
 
 
 # ==================== Template Routes ====================
@@ -247,6 +259,15 @@ def scanner_status():
     return jsonify(scanner_service.get_status())
 
 
+@app.route('/api/scanner/cancel', methods=['POST'])
+def cancel_scan():
+    """Cancel current scan operation (best-effort)."""
+    try:
+        return jsonify(scanner_service.cancel_scan())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 # ==================== WebSocket Events ====================
 
 @socketio.on('connect')
@@ -284,9 +305,12 @@ if __name__ == '__main__':
     print("=" * 50)
     print("OMRChecker Web Interface")
     print("=" * 50)
-    print(f"Server starting at http://localhost:5000")
+    port = int(os.environ.get("OMR_WEB_PORT", "5000"))
+    debug = os.environ.get("OMR_WEB_DEBUG", "0").lower() in {"1", "true", "yes", "on"}
+    print(f"Server starting at http://localhost:{port}")
     print(f"Upload folder: {UPLOAD_FOLDER}")
     print(f"Results folder: {RESULTS_FOLDER}")
     print("=" * 50)
     
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
+    # Disable auto-reloader by default (it can cause WinError 10048 with eventlet on Windows).
+    socketio.run(app, host="0.0.0.0", port=port, debug=debug, use_reloader=False)

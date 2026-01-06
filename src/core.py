@@ -721,7 +721,8 @@ class ImageInstanceOps:
                     int(config.dimensions.display_width * 2.5),
                 ),
             )
-            ImageUtils.save_img(f"{save_dir}stack/{name}_{str(key)}_stack.jpg", result)
+            stack_path = save_dir.joinpath("stack", f"{name}_{str(key)}_stack.jpg")
+            ImageUtils.save_img(str(stack_path), result)
 
     def reset_all_save_img(self):
         for i in range(self.save_image_level):

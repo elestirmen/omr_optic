@@ -24,9 +24,10 @@ PLATFORM = platform.system()
 class ScannerService:
     """Cross-platform scanner service with ADF support"""
     
-    def __init__(self, upload_folder: Path, socketio=None):
+    def __init__(self, upload_folder: Path, socketio=None, omr_service=None):
         self.upload_folder = Path(upload_folder)
         self.socketio = socketio
+        self.omr_service = omr_service
         self.current_scan = None
         self.status = {
             'scanning': False,
@@ -157,8 +158,24 @@ class ScannerService:
             
             # Auto-process if requested
             if auto_process and self.status['pages_scanned'] > 0:
-                self._emit_status('processing_started', {'session_id': session_id})
-                # Processing will be handled by the OMR service
+                if not self.omr_service:
+                    self._emit_status('processing_error', {
+                        'session_id': session_id,
+                        'error': 'OMR service not configured'
+                    })
+                else:
+                    self._emit_status('processing_started', {'session_id': session_id})
+                    try:
+                        result = self.omr_service.process_session(session_id, template_id)
+                        self._emit_status('processing_complete', {
+                            'session_id': session_id,
+                            'status': result.get('status', 'completed')
+                        })
+                    except Exception as e:
+                        self._emit_status('processing_error', {
+                            'session_id': session_id,
+                            'error': str(e)
+                        })
                 
         except Exception as e:
             self._emit_status('scan_error', {'error': str(e)})

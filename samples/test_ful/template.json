@@ -1,0 +1,54 @@
+{
+  "pageDimensions": [
+    2481,
+    3506
+  ],
+  "bubbleDimensions": [
+    25,
+    25
+  ],
+  "fieldBlocks": {
+    "Ogrenci_No": {
+      "fieldType": "QTYPE_INT",
+      "fieldLabels": [
+        "ogrenci1..7"
+      ],
+      "origin": [
+        1788,
+        840
+      ],
+      "bubblesGap": 53,
+      "labelsGap": 55,
+      "direction": "vertical"
+    },
+    "ad_soyad": {
+      "fieldType": "QTYPE_TR_ALPHABET",
+      "fieldLabels": [
+        "ad_soyad1..20"
+      ],
+      "origin": [
+        139,
+        239
+      ],
+      "bubblesGap": 51,
+      "labelsGap": 52,
+      "direction": "vertical"
+    },
+    "Test_1_30": {
+      "fieldType": "QTYPE_MCQ5",
+      "fieldLabels": [
+        "q1..30"
+      ],
+      "origin": [
+        190,
+        1843
+      ],
+      "bubblesGap": 57,
+      "labelsGap": 51,
+      "direction": "horizontal"
+    }
+  },
+  "preProcessors": [],
+  "customLabels": {},
+  "outputColumns": []
+}

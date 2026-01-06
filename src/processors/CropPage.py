@@ -69,10 +69,11 @@ class CropPage(ImagePreprocessor):
         # Resize should be done with another preprocessor is needed
         sheet = self.find_page(image, file_path)
         if len(sheet) == 0:
-            logger.error(
-                f"\tError: Paper boundary not found for: '{file_path}'\nHave you accidentally included CropPage preprocessor?"
+            logger.warning(
+                f"\tWarning: Paper boundary not found for: '{file_path}'. "
+                "Skipping CropPage and continuing with the original image."
             )
-            return None
+            return image
 
         logger.info(f"Found page corners: \t {sheet.tolist()}")
 
@@ -100,9 +101,9 @@ class CropPage(ImagePreprocessor):
         # Close the small holes, i.e. Complete the edges on canny image
         closed = cv2.morphologyEx(image, cv2.MORPH_CLOSE, kernel)
 
-        edge = cv2.Canny(
-            closed, CANNY_PARAMS["lower_threshold"], CANNY_PARAMS["upper_threshold"]
-        )
+        low_thr = min(CANNY_PARAMS["lower_threshold"], CANNY_PARAMS["upper_threshold"])
+        high_thr = max(CANNY_PARAMS["lower_threshold"], CANNY_PARAMS["upper_threshold"])
+        edge = cv2.Canny(closed, low_thr, high_thr)
 
         if config.outputs.show_image_level >= 5:
             InteractionUtils.show("edge", edge, config=config)

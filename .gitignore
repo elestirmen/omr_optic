@@ -7,6 +7,10 @@
 inputs/*
 outputs/*
 
+# Web runtime data
+web/uploads/*
+web/results/*
+
 # Misc
 **/.DS_Store
 **/__pycache__

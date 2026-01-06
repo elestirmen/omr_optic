@@ -181,11 +181,11 @@
     },
     "outputColumns": [
         "ad1..24",
-        "tc1..11",
-        "ogrenci1..7",
+        "TC_Kimlik",
+        "Ogrenci_No",
         "kitapcik",
         "q1..120",
         "alan1..3",
-        "tel1..11"
+        "Telefon"
     ]
 }

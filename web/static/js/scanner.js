@@ -86,6 +86,10 @@ async function loadTemplates() {
                 option.textContent = template.name;
                 scanTemplateSelect.appendChild(option);
             });
+
+            if (scanTemplateSelect.querySelector('option[value=\"kapadokya\"]')) {
+                scanTemplateSelect.value = 'kapadokya';
+            }
         }
     } catch (error) {
         console.error('Error loading templates:', error);
@@ -258,7 +262,7 @@ function addPageThumbnail(filename) {
         const thumb = document.createElement('div');
         thumb.className = 'image-item';
         thumb.innerHTML = `
-            <img src="${API_BASE}/api/results/${currentSessionId}/image/${filename}" 
+            <img src="${API_BASE}/api/uploads/${currentSessionId}/file/${filename}" 
                  alt="Page" loading="lazy"
                  onerror="this.parentElement.innerHTML='📄'">
         `;
