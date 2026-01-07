@@ -204,6 +204,13 @@ def get_template(template_id):
         return jsonify({'error': 'Template not found'}), 404
 
 
+@app.route('/api/templates/<template_id>/asset/<path:filename>', methods=['GET'])
+def get_template_asset(template_id, filename):
+    """Serve a file from samples/<template_id>/ (for previews like sample.jpg)."""
+    template_dir = omr_service.samples_folder / template_id
+    return send_from_directory(str(template_dir), filename)
+
+
 @app.route('/api/templates', methods=['POST'])
 def create_template():
     """Create a new template"""
@@ -214,6 +221,22 @@ def create_template():
     try:
         result = omr_service.create_template(data)
         return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/templates/<template_id>', methods=['PUT'])
+def update_template(template_id):
+    """Update an existing template"""
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Template data required'}), 400
+
+    try:
+        result = omr_service.update_template(template_id, data)
+        return jsonify(result)
+    except FileNotFoundError:
+        return jsonify({'error': 'Template not found'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

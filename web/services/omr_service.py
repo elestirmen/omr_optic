@@ -180,9 +180,10 @@ class OMRService:
         
         # Remove non-template fields
         template_data = {k: v for k, v in data.items() if k != 'name'}
+        template_data = self._normalize_template_payload(template_data)
         
         with open(template_path, 'w', encoding='utf-8') as f:
-            json.dump(template_data, f, indent=2)
+            json.dump(template_data, f, ensure_ascii=False, indent=2)
 
         # Create/refresh a matching config.json so web-created templates work out of the box.
         try:
@@ -199,6 +200,33 @@ class OMRService:
             'id': name,
             'path': str(template_path)
         }
+
+    def update_template(self, template_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Update an existing template in samples/<template_id>/template.json."""
+        template_folder = self.samples_folder / template_id
+        template_path = template_folder / "template.json"
+        if not template_path.exists():
+            raise FileNotFoundError(f"Template {template_id} not found")
+
+        # Remove UI/meta fields and normalize to a valid template payload.
+        template_data = {
+            k: v for k, v in (data or {}).items() if k not in {"name", "id", "path"}
+        }
+        template_data = self._normalize_template_payload(template_data)
+
+        with open(template_path, "w", encoding="utf-8") as f:
+            json.dump(template_data, f, ensure_ascii=False, indent=2)
+
+        # Keep config.json in sync (best effort).
+        try:
+            config_path = template_folder / "config.json"
+            config = self._generate_config_for_template(template_data)
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+        return {"success": True, "id": template_id, "path": str(template_path)}
     
     def _get_template_path(self, template_id: str) -> Optional[Path]:
         """Get template file path from ID"""
@@ -221,6 +249,17 @@ class OMRService:
         if (self.samples_folder / default_id / "template.json").exists():
             return default_id
         return None
+
+    @staticmethod
+    def _normalize_template_payload(template_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Ensure required keys exist so templates created/edited via web remain valid."""
+        template_data = dict(template_data or {})
+        template_data.setdefault("preProcessors", [])
+        template_data.setdefault("customLabels", {})
+        template_data.setdefault("outputColumns", [])
+        if "fieldBlocks" not in template_data:
+            template_data["fieldBlocks"] = {}
+        return template_data
 
     def _apply_template_to_session(self, template_path: Path, session_folder: Path) -> None:
         """Copy template + required companion files into the session folder."""

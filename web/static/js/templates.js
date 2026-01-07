@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.getElementById('use-template-btn')?.addEventListener('click', useCurrentTemplate);
+    document.getElementById('edit-template-btn')?.addEventListener('click', editCurrentTemplate);
 });
 
 // Load templates
@@ -149,6 +150,13 @@ function closeTemplateModal() {
 function useCurrentTemplate() {
     if (currentTemplate && currentTemplate.id) {
         window.location.href = `process.html?template=${currentTemplate.id}`;
+    }
+}
+
+// Edit current template (redirect to template editor)
+function editCurrentTemplate() {
+    if (currentTemplate && currentTemplate.id) {
+        window.location.href = `template-editor.html?template=${encodeURIComponent(currentTemplate.id)}`;
     }
 }
 

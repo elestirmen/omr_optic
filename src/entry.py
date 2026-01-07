@@ -86,7 +86,8 @@ def process_dir(
 ):
     # Update local tuning_config (in current recursion stack)
     local_config_path = curr_dir.joinpath(CONFIG_FILENAME)
-    if os.path.exists(local_config_path):
+    local_config_exists = os.path.exists(local_config_path)
+    if local_config_exists:
         tuning_config = open_config_with_defaults(local_config_path)
 
     # Override config from CLI flags
@@ -162,7 +163,7 @@ def process_dir(
             omr_files,
             template,
             tuning_config,
-            local_config_path,
+            local_config_path if local_config_exists else None,
             evaluation_config,
             args,
         )
