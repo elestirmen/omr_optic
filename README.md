@@ -362,11 +362,14 @@ python main.py -i inputs/sinavim --debug
 
 ### Web Arayüzü Kullanımı
 
-Web arayüzü, tarayıcı desteği, şablon editörü ve sonuç görüntüleme gibi gelişmiş özellikler sunar.
+Web arayüzü, tarayıcı desteği, şablon editörü ve sonuç görüntüleme gibi gelişmiş özellikler sunar. Tamamen Türkçe arayüze sahiptir.
 
 #### Web Sunucusunu Başlatma
 
 ```bash
+# ana dizinde olduğunuzdan emin olun
+cd OMRChecker
+
 # Web klasörüne git
 cd web
 
@@ -374,11 +377,26 @@ cd web
 python app.py
 ```
 
-Sunucu başladıktan sonra tarayıcınızda açın:
-- **Ana Sayfa:** http://localhost:5000
-- **Tarayıcı:** http://localhost:5000/scanner.html
-- **Şablon Editörü:** http://localhost:5000/template-editor.html
-- **İşleme:** http://localhost:5000/process.html
+Başarılı başlatma sonrası konsol çıktısı:
+```
+==================================================
+OMRChecker Web Interface
+==================================================
+Serving on: http://localhost:5000
+Upload folder: web/uploads
+Results folder: web/results
+==================================================
+```
+
+#### Web Arayüzü Sayfaları
+
+| URL | Sayfa | Açıklama |
+|-----|-------|----------|
+| http://localhost:5000 | **Ana Sayfa** | Hızlı başlangıç ve özellik tanıtımı |
+| http://localhost:5000/process.html | **OMR İşleme** | Dosya yükleme ve işleme |
+| http://localhost:5000/scanner.html | **Tarayıcı** | Tarayıcıdan doğrudan tarama |
+| http://localhost:5000/templates.html | **Şablonlar** | Şablon yönetimi |
+| http://localhost:5000/template-editor.html | **Şablon Editörü** | Yeni şablon oluşturma |
 
 #### Ortam Değişkenleri
 
@@ -392,29 +410,301 @@ set OMR_WEB_DEBUG=true      # Windows
 export OMR_WEB_DEBUG=true   # Linux/macOS
 ```
 
-#### Web Arayüzü Özellikleri
+---
 
-| Sayfa | Özellik |
-|-------|---------|
-| **Ana Sayfa** | Hızlı başlangıç ve navigasyon |
-| **Tarayıcı (Scanner)** | TWAIN/SANE tarayıcı ile doğrudan tarama |
-| **İşleme (Process)** | Dosya yükleme ve toplu işleme |
-| **Şablon Editörü** | Görsel şablon oluşturma ve düzenleme |
-| **Şablonlar** | Kayıtlı şablonları yönetme |
+### 🌐 Web Arayüzü Detaylı Kullanım Kılavuzu
 
-#### Tarayıcı Kullanımı
+#### 1. Ana Sayfa (index.html)
 
-**Windows (TWAIN):**
-1. Tarayıcınızı bilgisayara bağlayın
-2. Web arayüzünde "Tarayıcı" sayfasına gidin
-3. "Tarayıcı Listele" ile cihazları görün
-4. Tarayıcı seçip "Tara" butonuna tıklayın
-5. ADF (Otomatik Belge Besleyici) varsa seçebilirsiniz
+Ana sayfa şu bilgileri ve işlevleri sunar:
 
-**Linux (SANE):**
-1. SANE kurulumunu yapın: `sudo apt install sane sane-utils`
-2. Tarayıcı izinlerini ayarlayın: `sudo adduser $USER scanner`
-3. Web arayüzünden tarama yapın
+**İstatistikler:**
+- Toplam işlenen form sayısı
+- Bugün işlenen form sayısı
+- Doğruluk oranı
+
+**Hızlı İşlemler:**
+- 📤 **Dosya Yükle** - OMR formlarını sürükle-bırak ile yükle
+- 🖨️ **Tarayıcı Kullan** - Bağlı tarayıcıdan otomatik tara ve işle
+- 📝 **Şablon Yönetimi** - Şablonları görüntüle ve düzenle
+
+**Özellikler Listesi:**
+- 🎯 Yüksek Doğruluk (%99+)
+- ⚡ Hızlı İşleme (200+ form/dk)
+- 🖨️ Tarayıcı Desteği (ADF)
+- 📱 Mobil Uyumlu
+- 🎨 Esnek Şablonlar
+- 📊 Excel Çıktısı
+
+---
+
+#### 2. OMR İşleme Sayfası (process.html)
+
+Bu sayfa dosya yükleme ve toplu işleme için kullanılır.
+
+**Adım 1: Şablon Seçimi**
+1. "Şablon Seçin" açılır menüsünden uygun şablonu seçin
+2. Şablonlar `samples/` klasöründen otomatik yüklenir
+
+**Adım 2: Dosya Yükleme**
+
+Üç yöntemle dosya yükleyebilirsiniz:
+
+| Yöntem | Açıklama |
+|--------|----------|
+| **Sürükle-Bırak** | Dosyaları doğrudan yükleme alanına sürükleyin |
+| **Dosya Seç** | Birden fazla dosya seçmek için butonu tıklayın |
+| **Klasör Seç** | Tüm klasörü seçip içindeki tüm görselleri yükleyin |
+
+**Desteklenen Formatlar:** JPG, JPEG, PNG, BMP, TIFF
+
+**Adım 3: İşleme**
+1. Yüklenen dosyalar listede görünür
+2. "İşlemeyi Başlat" butonuna tıklayın
+3. İlerleme çubuğu işlem durumunu gösterir
+
+**Adım 4: Sonuçları Görüntüleme**
+- **Sonuç Tablosu:** Tüm formların verileri tabloda görünür
+- **İşlenmiş Görüntüler:** Her formun işaretlenmiş hali görüntülenebilir
+- **CSV İndir:** Sonuçları Excel'e aktarmak için CSV indirin
+
+**Sonuç Tablosu Örneği:**
+
+| Dosya | Öğrenci No | Soru 1 | Soru 2 | ... | Puan |
+|-------|------------|--------|--------|-----|------|
+| form1.jpg | 1234567 | A | B | ... | 85 |
+| form2.jpg | 1234568 | B | C | ... | 72 |
+
+---
+
+#### 3. Tarayıcı Sayfası (scanner.html)
+
+Bu sayfa doğrudan tarayıcıdan OMR formlarını taramak ve işlemek için kullanılır.
+
+**Tarayıcı Gereksinimleri:**
+
+| İşletim Sistemi | Protokol | Kurulum |
+|-----------------|----------|---------|
+| **Windows** | TWAIN | Tarayıcı sürücüsü yeterli, `pytwain` paketi gerekli |
+| **Linux** | SANE | `sane`, `sane-utils`, `python-sane` paketleri gerekli |
+
+**Kullanım Adımları:**
+
+**Adım 1: Tarayıcı Seçimi**
+1. Sayfa açıldığında tarayıcılar otomatik listelenir
+2. "🔄 Yenile" butonu ile listeyi güncelleyebilirsiniz
+3. Açılır menüden tarayıcınızı seçin
+
+**Tarayıcı Bilgileri (Görüntülenen):**
+- **Platform:** Windows / Linux
+- **Protokol:** TWAIN / SANE
+- **ADF Desteği:** Var / Yok
+
+**Adım 2: Tarama Ayarları**
+
+| Seçenek | Açıklama |
+|---------|----------|
+| ☑️ **Otomatik Belge Besleyici (ADF) Kullan** | Birden fazla sayfa için etkinleştirin. Bu seçenek sayesinde tüm formlar sırayla taranır |
+| ☑️ **Tarama Sonrası Otomatik İşle** | Tarama tamamlandığında formları otomatik olarak OMR sistemine gönderir |
+| ☑️ **Tarayıcı arayüzünü göster** | Epson Scan gibi tarayıcı yazılımının arayüzünü gösterir. Kapatırsanız sessiz tarama yapılır (bazı sürücüler desteklemeyebilir) |
+| **İşleme Şablonu** | Tarama sonrası kullanılacak OMR şablonu |
+
+**Adım 3: Taramayı Başlatma**
+1. "🖨️ Taramayı Başlat" butonuna tıklayın
+2. ADF kullanılıyorsa tüm sayfalar sırayla taranır
+3. İlerleme halka ile görsel olarak gösterilir
+4. Taranan her sayfa küçük resim olarak görünür
+
+**Adım 4: Sonuçları Alma**
+- Tarama tamamlandığında otomatik işleme başlar
+- Sonuçları görüntüle ve CSV olarak indirebilirsiniz
+
+**İptal Etme:**
+- Tarama sırasında "⏹️ İptal Et" butonu görünür
+- Bu butona tıklayarak işlemi durdurabilirsiniz
+
+---
+
+#### 4. Şablonlar Sayfası (templates.html)
+
+Bu sayfa mevcut şablonları listelemek ve yönetmek için kullanılır.
+
+**Şablon Listesi:**
+- Tüm şablonlar kart görünümünde listelenir
+- Her kart şablon adını ve önizleme görselini gösterir
+
+**Şablon Detayları (Modal pencere):**
+Bir şablona tıkladığınızda detay penceresi açılır:
+
+| Bölüm | Açıklama |
+|-------|----------|
+| **Sayfa Boyutları** | Genişlik x Yükseklik (piksel) |
+| **Kabarcık Boyutları** | Kabarcık genişlik x yükseklik |
+| **Alan Blokları** | Tüm tanımlı alanların listesi |
+| **Ön İşlemciler** | CropPage, CropOnMarkers vb. |
+| **JSON Yapısı** | Ham template.json içeriği |
+
+**İşlemler:**
+- **Kapat:** Modal pencereyi kapatır
+- **Düzenle:** Şablon editöründe açar
+- **Bu Şablonu Kullan:** OMR işleme sayfasına yönlendirir
+
+**Yeni Şablon Oluşturma:**
+- "➕ Yeni Şablon" butonu şablon editörünü açar
+
+---
+
+#### 5. Şablon Editörü (template-editor.html)
+
+Bu sayfa görsel olarak yeni OMR şablonları oluşturmak için kullanılır. Gelişmiş bir editör arayüzüne sahiptir.
+
+**Araç Çubuğu:**
+
+| Araç | Açıklama |
+|------|----------|
+| 📷 **Görüntü Yükle** | Boş OMR formu görseli yükler |
+| 🎯 **Alan Seç** | Açıkken sürükle-bırak ile alan seçilir |
+| **Koordinat Göstergesi** | Fare konumu (X, Y) |
+| ➖/➕ **Zoom** | Görüntüyü yakınlaştır/uzaklaştır |
+
+**Sağ Panel Bölümleri:**
+
+##### 📄 Sayfa Ayarları
+- **Genişlik (px):** Sayfa genişliği
+- **Yükseklik (px):** Sayfa yüksekliği
+- **Kabarcık Boyutu (px):** Varsayılan kabarcık boyutu
+
+##### 💡 İpuçları
+1. 📷 Görüntü yükle
+2. 🎯 Alan Seç açıkken sürükle-bırak ile alanı seç
+3. 🎯 Kapalıyken bloklara tıkla-sürükle; ok tuşlarıyla ince ayar (Shift=5px)
+4. 🔁 Test bloklarını "Hızlı Çoğaltma" ile kopyala
+5. 🔗 Öğrenci no/TC gibi alanları "Birleştirilmiş Alanlar" ile tek sütun yap
+
+##### Hızlı Alanlar (Preset'ler)
+Tek tıkla hazır alan türleri:
+
+| Preset | Açıklama |
+|--------|----------|
+| **Öğrenci No (7)** | 7 haneli öğrenci numarası |
+| **TC Kimlik (11)** | 11 haneli TC kimlik numarası |
+| **Ad/Soyad (12)** | 12 harflik isim alanı |
+| **Test (1-30)** | 30 soruluk test bloğu |
+| **Kitapçık** | A/B kitapçık türü |
+
+##### Alan Bloğu Formu
+
+**Temel Bilgiler:**
+- **Blok Adı:** Benzersiz ad (örn: Sorular_1_30)
+- **Alan Tipi:** MCQ5, MCQ4, Sayısal, Türk Alfabesi, Özel
+- **Alan Etiketleri:** q1..30 veya ad1..12 formatında
+
+**Alan Türleri:**
+
+| Tür | Kod | Değerler |
+|-----|-----|----------|
+| MCQ 5 Seçenek | QTYPE_MCQ5 | A, B, C, D, E |
+| MCQ 4 Seçenek | QTYPE_MCQ4 | A, B, C, D |
+| Sayısal (0-9) | QTYPE_INT | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 |
+| Sayısal (1-0) | QTYPE_INT_FROM_1 | 1, 2, 3, 4, 5, 6, 7, 8, 9, 0 |
+| Türk Alfabesi | QTYPE_TR_ALPHABET | A-Z ve Türkçe karakterler |
+| Özel | CUSTOM | Virgülle ayrılmış değerler |
+
+**Koordinat ve Boyut:**
+- **Başlangıç X/Y:** Sol üst köşe koordinatları
+- **Seçim Genişliği/Yüksekliği:** Alan boyutları
+
+**Grid Ayarları:**
+- **Kabarcık Sayısı:** Yatayda kaç seçenek (örn: 5 = A,B,C,D,E)
+- **Satır Sayısı:** Dikeyde kaç soru/alan
+- **Kabarcık Aralığı:** Yatay boşluk (piksel)
+- **Satır Aralığı:** Dikey boşluk (piksel)
+- **Otomatik Aralık Hesabı:** Açıkken boyutlara göre otomatik hesaplar
+
+**Yön:**
+- ↔️ **Yatay:** Seçenekler yan yana (A B C D E)
+- ↕️ **Dikey:** Seçenekler alta doğru
+
+##### 🔁 Hızlı Çoğaltma
+Aynı bloğu kopyalayarak çoklu blok oluşturma:
+
+| Parametre | Açıklama |
+|-----------|----------|
+| **Ek Kopya** | Kaç adet kopya (0-20) |
+| **Etiket Kaydır** | Her kopyada etiket numarası artışı |
+| **ΔX** | Her kopyada X ekseninde kayma |
+| **ΔY** | Her kopyada Y ekseninde kayma |
+
+**Örnek:** Test_1_30 bloğunu sağa doğru çoğaltma:
+- Ek Kopya: 3
+- Etiket Kaydır: 30 (q31..60, q61..90, q91..120 olur)
+- ΔX: 190
+- ΔY: 0
+
+##### 📋 Eklenen Alanlar
+Oluşturulan tüm blokların listesi:
+- **Kırmızı kenarlık:** Normal blok
+- **Yeşil kenarlık:** Aktif/seçili blok
+- Her bloğun adı, türü ve koordinatları gösterilir
+- Tıklayarak seçip düzenleyebilirsiniz
+- 🗑️ butonu ile silebilirsiniz
+
+##### 🔗 Birleştirilmiş Alanlar (Custom Labels)
+Birden fazla sütunu tek bir değere birleştirme:
+
+**Örnek Kullanım:**
+- **Alan Adı:** Ogrenci_No
+- **Etiketler:** ogrenci1..7
+
+Bu, CSV çıktısında 7 ayrı sütun yerine tek "Ogrenci_No" sütunu oluşturur.
+
+##### 📝 JSON Önizleme
+Oluşturulan template.json dosyasının canlı önizlemesi.
+
+**Şablonu Kaydetme:**
+1. Üst barda şablon adını girin
+2. "💾 Kaydet" butonuna tıklayın
+3. Şablon samples/ klasörüne kaydedilir
+
+---
+
+#### API Endpoint'leri
+
+Web arayüzü aşağıdaki REST API endpoint'lerini kullanır:
+
+| Endpoint | Metod | Açıklama |
+|----------|-------|----------|
+| `/api/health` | GET | Sunucu durumu kontrolü |
+| `/api/upload` | POST | Dosya yükleme |
+| `/api/process` | POST | OMR işleme başlatma |
+| `/api/process/single` | POST | Tek dosya yükle ve işle |
+| `/api/results/<session_id>` | GET | Sonuçları getir |
+| `/api/results/<session_id>/csv` | GET | CSV indir |
+| `/api/results/<session_id>/image/<filename>` | GET | İşlenmiş görüntü |
+| `/api/templates` | GET | Şablon listesi |
+| `/api/templates/<id>` | GET | Şablon detayları |
+| `/api/templates` | POST | Yeni şablon oluştur |
+| `/api/templates/<id>` | PUT | Şablon güncelle |
+| `/api/scanner/devices` | GET | Tarayıcı listesi |
+| `/api/scanner/scan` | POST | Tarama başlat |
+| `/api/scanner/status` | GET | Tarama durumu |
+| `/api/scanner/cancel` | POST | Taramayı iptal et |
+
+---
+
+#### WebSocket Olayları
+
+Gerçek zamanlı güncellemeler için Socket.IO kullanılır:
+
+| Olay | Açıklama |
+|------|----------|
+| `scan_started` | Tarama başladı |
+| `page_scanned` | Sayfa tarandı (sayfa numarası ile) |
+| `scan_complete` | Tarama tamamlandı |
+| `scan_error` | Tarama hatası |
+| `processing_started` | OMR işleme başladı |
+| `processing_progress` | İşleme ilerlemesi |
+| `processing_complete` | İşleme tamamlandı |
 
 ---
 
@@ -445,21 +735,34 @@ OMRChecker/
 │   ├── requirements.txt    # Web bağımlılıkları
 │   ├── static/             # Statik dosyalar
 │   │   ├── css/            # Stiller
-│   │   ├── js/             # JavaScript
+│   │   │   └── styles.css  # Ana stil dosyası
+│   │   ├── js/             # JavaScript dosyaları
+│   │   │   ├── main.js     # Ana sayfa scripti
+│   │   │   ├── process.js  # İşleme sayfası
+│   │   │   ├── scanner.js  # Tarayıcı kontrolü
+│   │   │   ├── templates.js # Şablon yönetimi
+│   │   │   └── template-editor.js # Şablon editörü
 │   │   ├── index.html      # Ana sayfa
 │   │   ├── scanner.html    # Tarayıcı sayfası
 │   │   ├── process.html    # İşleme sayfası
-│   │   └── template-editor.html  # Şablon editörü
-│   └── services/           # Servis modülleri
-│       ├── omr_service.py  # OMR işleme servisi
-│       └── scanner_service.py  # Tarayıcı servisi
+│   │   ├── templates.html  # Şablon listesi
+│   │   └── template-editor.html # Şablon editörü
+│   ├── services/           # Servis modülleri
+│   │   ├── omr_service.py  # OMR işleme servisi
+│   │   └── scanner_service.py # Tarayıcı servisi
+│   ├── uploads/            # Yüklenen dosyalar
+│   └── results/            # İşlem sonuçları
 │
 ├── samples/                # Örnek şablonlar
 │   ├── sample1/            # Temel OMR örneği
-│   ├── sample2/            # İleri düzey örnek
-│   ├── sample3/            # Özel alan örneği
-│   ├── sample4-6/          # Diğer örnekler
+│   │   ├── template.json   # Şablon dosyası
+│   │   ├── config.json     # Yapılandırma
+│   │   ├── omr_marker.jpg  # Köşe marker
+│   │   └── MobileCamera/   # Örnek görüntüler
+│   ├── sample2-6/          # Diğer örnekler
 │   ├── answer-key/         # Cevap anahtarı örnekleri
+│   │   ├── using-csv/      # CSV tabanlı değerlendirme
+│   │   └── weighted-answers/ # Ağırlıklı puanlama
 │   └── community/          # Topluluk şablonları
 │
 ├── inputs/                 # Girdi klasörü (formlarınızı buraya koyun)
@@ -520,7 +823,7 @@ Her OMR projesi için üç ana yapılandırma dosyası kullanılır:
 | Parametre | Tür | Açıklama |
 |-----------|-----|----------|
 | `pageDimensions` | [genişlik, yükseklik] | Sayfa boyutları (piksel) |
-| `bubbleDimensions` | [genişlik, yükseklik] | Baloncuk boyutları |
+| `bubbleDimensions` | [genişlik, yükseklik] | Kabarcık boyutları |
 | `fieldBlocks` | object | Alan blokları tanımları |
 | `preProcessors` | array | Ön işleme adımları |
 | `customLabels` | object | Özel etiket tanımları |
@@ -532,6 +835,8 @@ Her OMR projesi için üç ana yapılandırma dosyası kullanılır:
 | `QTYPE_MCQ4` | 4 seçenekli çoktan seçmeli | A, B, C, D |
 | `QTYPE_MCQ5` | 5 seçenekli çoktan seçmeli | A, B, C, D, E |
 | `QTYPE_INT` | Sayısal değer | 0-9 |
+| `QTYPE_INT_FROM_1` | Sayısal değer (1'den başlar) | 1-0 |
+| `QTYPE_TR_ALPHABET` | Türk alfabesi | A-Z, Ç, Ğ, İ, Ö, Ş, Ü |
 | `QTYPE_ALPHA` | Alfabetik | A-Z |
 
 #### Alan Bloğu Parametreleri
@@ -629,26 +934,22 @@ Web arayüzündeki Şablon Editörü, görsel olarak OMR şablonları oluşturma
    http://localhost:5000/template-editor.html
 
 3. **Boş bir OMR formu yükleyin:**
-   - "Görsel Seç" butonu ile formunuzu yükleyin
+   - "📷 Görüntü Yükle" butonu ile formunuzu yükleyin
    - Görüntü canvas üzerinde görünecektir
 
 4. **Alan blokları ekleyin:**
+   - "🎯 Alan Seç" toggle'ını aktif edin
    - Canvas üzerinde fare ile sürükleyerek alan seçin
-   - Sağ panelde alan özelliklerini ayarlayın:
-     - **Alan Adı:** Benzersiz alan ismi
-     - **Alan Türü:** MCQ4, MCQ5, INT, ALPHA
-     - **Satır Sayısı:** Soru sayısı
-     - **Sütun Sayısı:** Seçenek sayısı
-     - **Baloncuk Boyutu:** Genişlik x Yükseklik
+   - Sağ panelde alan özelliklerini ayarlayın
 
 5. **İnce ayar yapın:**
+   - Ok tuşları ile hassas konumlandırma (Shift+ok = 5px)
    - Koordinatları elle düzenleyin
-   - Boşlukları ayarlayın
    - Önizleme ile kontrol edin
 
 6. **Şablonu kaydedin:**
-   - "Kaydet" butonu ile template.json oluşturun
-   - samples/ klasörüne yeni şablon kaydedin
+   - Şablon adını girin
+   - "💾 Kaydet" butonu ile kaydedin
 
 ### Şablon Oluşturma İpuçları
 
@@ -656,6 +957,7 @@ Web arayüzündeki Şablon Editörü, görsel olarak OMR şablonları oluşturma
 - ✅ Düz ve gölgesiz tarama yapın
 - ✅ Marker'ları (köşe işaretleri) net tutun
 - ✅ Önce küçük bir örnekle test edin
+- ✅ Hızlı çoğaltma ile zaman kazanın
 - ❌ Eğri veya buruşuk formlar kullanmayın
 - ❌ Çok düşük çözünürlük kullanmayın
 
@@ -733,6 +1035,22 @@ Evet, `CropOnMarkers` preprocessor otomatik olarak eğriyi düzeltir. Bunun içi
 Evet! MIT lisansı ile tamamen ücretsiz ve açık kaynaklıdır.
 </details>
 
+<details>
+<summary><b>7. Web arayüzü hangi tarayıcılarda çalışır?</b></summary>
+
+Modern tüm tarayıcılar desteklenir: Chrome, Firefox, Edge, Safari. Önerilen: Chrome veya Firefox.
+</details>
+
+<details>
+<summary><b>8. ADF (Otomatik Belge Besleyici) nasıl kullanılır?</b></summary>
+
+1. Tarayıcınızın ADF özelliği olmalı
+2. Web arayüzünde tarayıcı sayfasını açın
+3. "Otomatik Belge Besleyici (ADF) Kullan" seçeneğini işaretleyin
+4. Formları besleyiciye yerleştirin
+5. Taramayı başlatın
+</details>
+
 ---
 
 ## 🐛 Sorun Giderme
@@ -769,6 +1087,21 @@ python main.py -i samples/sample1
 1. Tarayıcı sürücüsünün yüklü olduğundan emin olun
 2. 32-bit Python kullanıyorsanız 32-bit sürücü, 64-bit için 64-bit sürücü gerekir
 3. pytwain paketini yeniden yükleyin: `pip install --upgrade pytwain`
+</details>
+
+<details>
+<summary><b>WinError 10048: Port kullanımda</b></summary>
+
+**Çözüm:**
+```powershell
+# Farklı port kullanın
+set OMR_WEB_PORT=8080
+python app.py
+
+# VEYA portu kullanan işlemi bulun
+netstat -ano | findstr :5000
+taskkill /PID <PID> /F
+```
 </details>
 
 ### Linux Sorunları
@@ -810,6 +1143,27 @@ sudo usermod -aG scanner $USER
 # Oturumu kapatıp açın veya
 newgrp scanner
 ```
+</details>
+
+### Web Arayüzü Sorunları
+
+<details>
+<summary><b>Sunucuya bağlanılamıyor</b></summary>
+
+**Kontroller:**
+1. Sunucunun çalıştığından emin olun
+2. Port numarasını kontrol edin
+3. Firewall ayarlarını kontrol edin
+4. localhost yerine 127.0.0.1 deneyin
+</details>
+
+<details>
+<summary><b>Şablonlar yüklenmiyor</b></summary>
+
+**Çözüm:**
+1. samples/ klasörünün var olduğundan emin olun
+2. Her şablon klasöründe template.json olmalı
+3. Konsol hatalarını kontrol edin (F12)
 </details>
 
 ### Genel Sorunlar
