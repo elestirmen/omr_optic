@@ -148,17 +148,19 @@
             border-radius: 8px;
             margin-bottom: 8px;
             cursor: pointer;
-            border: 2px solid transparent;
+            border: 2px solid #ef4444;
             transition: all 0.2s;
         }
 
         .block-item:hover {
-            border-color: #6366f1;
+            border-color: #f87171;
+            background: #2a2a4a;
         }
 
         .block-item.active {
-            border-color: #22d3ee;
-            background: #2a2a4a;
+            border-color: #10b981;
+            background: #1a2e26;
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
         }
 
         .block-header {
@@ -515,7 +517,7 @@
                     </div>
                     <div class="form-group">
                         <label>Kabarcık Boyutu (px)</label>
-                        <input type="number" id="bubble-size" class="form-control" value="25">
+                        <input type="number" id="bubble-size" class="form-control" value="25" step="1">
                     </div>
                 </div>
 
@@ -557,7 +559,8 @@
                                 </div>
                             </div>
                         </div>
-                        <button type="button" class="btn btn-outline btn-sm" onclick="startNewBlock()">Yeni Alan</button>
+                        <button type="button" class="btn btn-outline btn-sm" onclick="startNewBlock()">Yeni
+                            Alan</button>
                     </div>
                     <div id="block-form">
                         <div class="form-group">
@@ -586,7 +589,8 @@
                         <div class="form-group">
                             <label>Alan Etiketleri *</label>
                             <input type="text" id="block-labels" class="form-control" placeholder="q1..30 veya ad1..12">
-                            <div class="form-hint">Örn: q1..30 (30 soru) | ad1..12 (12 harf) | tc1..11 | ogrenci1..7</div>
+                            <div class="form-hint">Örn: q1..30 (30 soru) | ad1..12 (12 harf) | tc1..11 | ogrenci1..7
+                            </div>
                         </div>
 
                         <div class="form-row">
@@ -625,11 +629,11 @@
                         <div class="form-row">
                             <div class="form-group">
                                 <label>Kabarcık Aralığı</label>
-                                <input type="number" id="block-bubbles-gap" class="form-control" value="40">
+                                <input type="number" id="block-bubbles-gap" class="form-control" value="40" step="0.01">
                             </div>
                             <div class="form-group">
                                 <label>Satır Aralığı</label>
-                                <input type="number" id="block-labels-gap" class="form-control" value="50">
+                                <input type="number" id="block-labels-gap" class="form-control" value="50" step="0.01">
                             </div>
                         </div>
 
@@ -640,7 +644,8 @@
                             </label>
                             <span style="font-size: 13px;">Otomatik aralık hesabı</span>
                         </div>
-                        <div class="form-hint">Açıksa etiket aralığı (q1..30 gibi) değişince aralıklar yeniden hesaplanır. Manuel ayarlarsanız otomatik kapanır.</div>
+                        <div class="form-hint">Açıksa etiket aralığı (q1..30 gibi) değişince aralıklar yeniden
+                            hesaplanır. Manuel ayarlarsanız otomatik kapanır.</div>
 
                         <div class="form-group">
                             <label>Yön</label>
@@ -651,7 +656,8 @@
                         </div>
 
                         <div style="display: flex; gap: 8px; margin-top: 16px;">
-                            <button class="btn btn-primary btn-block" id="save-block-btn" onclick="saveBlock()">Ekle</button>
+                            <button class="btn btn-primary btn-block" id="save-block-btn"
+                                onclick="saveBlock()">Ekle</button>
                             <button class="btn btn-outline" onclick="resetForm()">İptal</button>
                         </div>
 

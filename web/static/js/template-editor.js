@@ -35,6 +35,7 @@ let currentX = 0, currentY = 0;
 let activeBlockIndex = -1;
 let formDirty = false;
 let suppressDirty = false;
+let isPopulatingBlockForm = false;
 
 // Drag state (move blocks when selection mode is OFF)
 let isDraggingBlock = false;
@@ -682,6 +683,11 @@ function drawBubblePreview(rect) {
 // ==================== BLOCK MANAGEMENT ====================
 
 function recalculateGaps() {
+    // Skip if we're suppressing updates (e.g., during block selection)
+    if (suppressDirty) return;
+    // Skip if we're populating form from an existing block
+    if (isPopulatingBlockForm) return;
+
     const width = parseInt(document.getElementById('selection-width').value) || 100;
     const height = parseInt(document.getElementById('selection-height').value) || 100;
     const numBubbles = getCurrentFormNumBubbles();
@@ -692,7 +698,7 @@ function recalculateGaps() {
     const calcGap = (total, bubbleDim, count) => {
         if (!total || count <= 1) return 0;
         const gap = (total - bubbleDim) / (count - 1);
-        return Math.max(0, Math.round(gap));
+        return Math.max(0, Math.round(gap * 100) / 100);
     };
 
     if (direction === 'horizontal') {
@@ -705,6 +711,11 @@ function recalculateGaps() {
 }
 
 function updateActiveBlockPreview() {
+    // Skip if we're suppressing updates (e.g., during block selection)
+    if (suppressDirty) return;
+    // Skip if we're populating form from an existing block
+    if (isPopulatingBlockForm) return;
+
     markFormDirty();
 
     // Redraw image with current blocks
@@ -1112,8 +1123,8 @@ function addBlock() {
     let labels = document.getElementById('block-labels').value.trim();
     const originX = parseInt(document.getElementById('block-origin-x').value) || 0;
     const originY = parseInt(document.getElementById('block-origin-y').value) || 0;
-    const bubblesGap = parseInt(document.getElementById('block-bubbles-gap').value) || 40;
-    const labelsGap = parseInt(document.getElementById('block-labels-gap').value) || 50;
+    const bubblesGap = parseFloat(document.getElementById('block-bubbles-gap').value) || 40;
+    const labelsGap = parseFloat(document.getElementById('block-labels-gap').value) || 50;
     const direction = getCurrentFormDirection();
 
     // Unified add/update logic (kept here to avoid depending on old UI strings)
@@ -1370,6 +1381,12 @@ function selectBlock(index) {
 
     formDirty = false;
     suppressDirty = true;
+    isPopulatingBlockForm = true;
+
+    // Disable auto-gap when loading existing block to preserve its settings
+    autoGapEnabled = false;
+    const autoGapEl = document.getElementById('auto-gap');
+    if (autoGapEl) autoGapEl.checked = false;
 
     const selectionModeEl = document.getElementById('selection-mode');
     if (selectionModeEl) selectionModeEl.checked = false;
@@ -1420,6 +1437,7 @@ function selectBlock(index) {
     syncDuplicateDefaultsForLabels(block.fieldLabels[0]);
     updateBlocksList();
     drawImage();
+    isPopulatingBlockForm = false;
     suppressDirty = false;
     showToast(`Seçildi: ${block.name}`);
 }
@@ -1444,11 +1462,10 @@ function deleteBlock(index) {
 }
 
 function drawBlock(block, isActive) {
-    const colors = ['#6366f1', '#22d3ee', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
-    const blockIndex = fieldBlocks.indexOf(block);
-    const baseColor = colors[blockIndex % colors.length];
-    const activeColor = '#22d3ee';
-    const color = isActive ? activeColor : baseColor;
+    // Color scheme: active block = green, others = red
+    const activeColor = '#10b981';  // Emerald green
+    const inactiveColor = '#ef4444'; // Red
+    const color = isActive ? activeColor : inactiveColor;
 
     const origin = block.origin;
     const numLabels = parseLabels(block.fieldLabels[0]).length || 1;

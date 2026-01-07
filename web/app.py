@@ -77,18 +77,43 @@ def health_check():
 @app.route('/api/upload', methods=['POST'])
 def upload_files():
     """Upload OMR images for processing"""
-    if 'files' not in request.files and 'file' not in request.files:
+    files = request.files.getlist('files')
+    if not files:
+        single = request.files.get('file')
+        files = [single] if single else []
+
+    if not files:
         return jsonify({'error': 'No files provided'}), 400
-    
-    files = request.files.getlist('files') or [request.files.get('file')]
-    session_id = str(uuid.uuid4())
+
+    provided_session_id = request.form.get('session_id')
+    if provided_session_id:
+        try:
+            session_id = str(uuid.UUID(provided_session_id))
+        except ValueError:
+            return jsonify({'error': 'Invalid session_id'}), 400
+    else:
+        session_id = str(uuid.uuid4())
+
     session_folder = UPLOAD_FOLDER / session_id
     session_folder.mkdir(exist_ok=True)
     
     uploaded_files = []
+
+    def unique_filename(folder: Path, filename: str) -> str:
+        base, ext = os.path.splitext(filename)
+        candidate = filename
+        counter = 1
+        while (folder / candidate).exists():
+            candidate = f"{base}_{counter}{ext}"
+            counter += 1
+        return candidate
+
     for file in files:
         if file and file.filename and allowed_file(file.filename):
             filename = secure_filename(file.filename)
+            if not filename:
+                continue
+            filename = unique_filename(session_folder, filename)
             filepath = session_folder / filename
             file.save(str(filepath))
             uploaded_files.append(filename)
@@ -261,6 +286,7 @@ def start_scan():
     use_adf = data.get('use_adf', False)
     auto_process = data.get('auto_process', True)
     template_id = data.get('template_id')
+    show_ui = data.get('show_ui', True)
     
     try:
         session_id = str(uuid.uuid4())
@@ -269,7 +295,8 @@ def start_scan():
             device_id=device_id,
             use_adf=use_adf,
             auto_process=auto_process,
-            template_id=template_id
+            template_id=template_id,
+            show_ui=show_ui,
         )
         return jsonify(result)
     except Exception as e:

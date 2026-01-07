@@ -4,8 +4,8 @@
     3506
   ],
   "bubbleDimensions": [
-    25,
-    25
+    24,
+    24
   ],
   "fieldBlocks": {
     "Ogrenci_No": {
@@ -17,21 +17,34 @@
         1788,
         840
       ],
-      "bubblesGap": 53,
+      "bubblesGap": 54,
       "labelsGap": 55,
       "direction": "vertical"
     },
-    "ad_soyad": {
-      "fieldType": "QTYPE_TR_ALPHABET",
+    "TC_Kimlik_No": {
+      "fieldType": "QTYPE_INT",
       "fieldLabels": [
-        "ad_soyad1..20"
+        "tc1..11"
       ],
       "origin": [
-        139,
+        1194,
+        843
+      ],
+      "bubblesGap": 53,
+      "labelsGap": 53,
+      "direction": "vertical"
+    },
+    "Soyadi_Adi": {
+      "fieldType": "QTYPE_TR_ALPHABET",
+      "fieldLabels": [
+        "ad1..12"
+      ],
+      "origin": [
+        150,
         239
       ],
       "bubblesGap": 51,
-      "labelsGap": 52,
+      "labelsGap": 51,
       "direction": "vertical"
     },
     "Test_1_30": {
@@ -40,15 +53,33 @@
         "q1..30"
       ],
       "origin": [
-        190,
-        1843
+        191,
+        1846
       ],
-      "bubblesGap": 57,
+      "bubblesGap": 59,
       "labelsGap": 51,
       "direction": "horizontal"
     }
   },
-  "preProcessors": [],
+  "preProcessors": [
+    {
+      "name": "CropPage",
+      "options": {
+        "morphKernel": [
+          10,
+          10
+        ]
+      }
+    }
+  ],
   "customLabels": {},
-  "outputColumns": []
+  "outputColumns": [
+    "ad1..24",
+    "TC_Kimlik",
+    "Ogrenci_No",
+    "kitapcik",
+    "q1..120",
+    "alan1..3",
+    "Telefon"
+  ]
 }

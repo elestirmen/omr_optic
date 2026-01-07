@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
     loadTemplates();
 
     document.getElementById('create-template-btn')?.addEventListener('click', () => {
-        window.location.href = 'template-editor.html';
+        window.location.href = 'template-editor.html?empty=1';
     });
 
     document.getElementById('use-template-btn')?.addEventListener('click', useCurrentTemplate);

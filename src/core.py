@@ -263,7 +263,7 @@ class ImageInstanceOps:
             #     appendSaveImg(5,hist)
             #     appendSaveImg(2,hist)
 
-            per_omr_threshold_avg, total_q_strip_no, total_q_box_no = 0, 0, 0
+            per_omr_threshold_avg, total_q_strip_no = 0, 0
             for field_block in template.field_blocks:
                 block_q_strip_no = 1
                 box_w, box_h = field_block.bubble_dimensions
@@ -277,8 +277,9 @@ class ImageInstanceOps:
                     no_outliers = all_q_std_vals[total_q_strip_no] < global_std_thresh
                     # print(total_q_strip_no, field_block_bubbles[0].field_label,
                     #   all_q_std_vals[total_q_strip_no], "no_outliers:", no_outliers)
+                    q_strip_vals = all_q_strip_arrs[total_q_strip_no]
                     per_q_strip_threshold = self.get_local_threshold(
-                        all_q_strip_arrs[total_q_strip_no],
+                        q_strip_vals,
                         global_thr,
                         no_outliers,
                         f"Mean Intensity Histogram for {key}.{field_block_bubbles[0].field_label}.{block_q_strip_no}",
@@ -300,18 +301,30 @@ class ImageInstanceOps:
 
                     # TODO: get rid of total_q_box_no
                     detected_bubbles = []
-                    for bubble in field_block_bubbles:
-                        bubble_is_marked = (
-                            per_q_strip_threshold > all_q_vals[total_q_box_no]
-                        )
-                        total_q_box_no += 1
+                    field_type = getattr(field_block_bubbles[0], "field_type", None)
+                    apply_median_delta_filter = field_type in {
+                        "QTYPE_INT",
+                        "QTYPE_INT_FROM_1",
+                        "QTYPE_TR_ALPHABET",
+                    }
+                    strip_median = (
+                        float(np.median(q_strip_vals)) if apply_median_delta_filter else None
+                    )
+                    min_dark_delta = (
+                        float(config.threshold_params.get("MIN_JUMP", 25))
+                        if apply_median_delta_filter
+                        else None
+                    )
+                    for bubble, bubble_val in zip(field_block_bubbles, q_strip_vals):
+                        x, y = (bubble.x + field_block.shift, bubble.y)
+                        bubble_is_marked = per_q_strip_threshold > bubble_val
+                        if apply_median_delta_filter:
+                            bubble_is_marked = bubble_is_marked and (
+                                (strip_median - bubble_val) >= min_dark_delta
+                            )
                         if bubble_is_marked:
                             detected_bubbles.append(bubble)
-                            x, y, field_value = (
-                                bubble.x + field_block.shift,
-                                bubble.y,
-                                bubble.field_value,
-                            )
+                            field_value = bubble.field_value
                             cv2.rectangle(
                                 final_marked,
                                 (int(x + box_w / 12), int(y + box_h / 12)),

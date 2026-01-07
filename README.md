@@ -1,341 +1,900 @@
-# OMR Checker
-
-Read OMR sheets fast and accurately using a scanner 🖨 or your phone 🤳.
-
-## What is OMR?
-
-OMR stands for Optical Mark Recognition, used to detect and interpret human-marked data on documents. OMR refers to the process of reading and evaluating OMR sheets, commonly used in exams, surveys, and other forms.
-
-#### **Quick Links**
-
-- [Installation](#getting-started)
-- [User Guide](https://github.com/Udayraj123/OMRChecker/wiki)
-- [Contributor Guide](https://github.com/Udayraj123/OMRChecker/blob/master/CONTRIBUTING.md)
-- [Project Ideas List](https://github.com/users/Udayraj123/projects/2/views/1)
-
-<hr />
-
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](https://github.com/Udayraj123/OMRChecker/pull/new/master) <!-- [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-brightgreen.svg)](https://github.com/Udayraj123/OMRChecker/wiki/TODOs) -->
-[![GitHub pull-requests closed](https://img.shields.io/github/issues-pr-closed/Udayraj123/OMRChecker.svg)](https://github.com/Udayraj123/OMRChecker/pulls?q=is%3Aclosed)
-[![GitHub issues-closed](https://img.shields.io/github/issues-closed/Udayraj123/OMRChecker.svg)](https://GitHub.com/Udayraj123/OMRChecker/issues?q=is%3Aissue+is%3Aclosed)
-[![Ask me](https://img.shields.io/badge/Discuss-on_Github-purple.svg?style=flat-square)](https://github.com/Udayraj123/OMRChecker/issues/5)
-
-<!-- [![GitHub contributors](https://img.shields.io/github/contributors/Udayraj123/OMRChecker.svg)](https://GitHub.com/Udayraj123/OMRChecker/graphs/contributors/) -->
-
-[![GitHub stars](https://img.shields.io/github/stars/Udayraj123/OMRChecker.svg?style=social&label=Stars✯)](https://GitHub.com/Udayraj123/OMRChecker/stargazers/)
-[![Join](https://img.shields.io/badge/Join-Discord_group-purple.svg?style=flat-square)](https://discord.gg/qFv2Vqf)
-
-<!-- [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/gist/Udayraj123/a125b1531c61cceed5f06994329cba66/omrchecker-on-cloud.ipynb) -->
-
-## 🎯 Features
-
-A full-fledged OMR checking software that can read and evaluate OMR sheets scanned at any angle and having any color.
-
-| Specs <img width=200/> | ![Current_Speed](https://img.shields.io/badge/Speed-200+_OMRs/min-blue.svg?style=flat-square) ![Min Resolution](https://img.shields.io/badge/Min_Resolution-640x480-blue.svg?style=flat-square) <img width=200/> |
-| :--------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 💯 **Accurate**        | Currently nearly 100% accurate on good quality document scans; and about 90% accurate on mobile images.                                                                                                          |
-| 💪🏿 **Robust**          | Supports low resolution, xeroxed sheets. See [**Robustness**](https://github.com/Udayraj123/OMRChecker/wiki/Robustness) for more.                                                                                |
-| ⏩ **Fast**            | Current processing speed without any optimization is 200 OMRs/minute.                                                                                                                                            |
-| ✅ **Customizable**    | [Easily apply](https://github.com/Udayraj123/OMRChecker/wiki/User-Guide) to custom OMR layouts, surveys, etc.                                                                                                    |
-| 📊 **Visually Rich**   | [Get insights](https://github.com/Udayraj123/OMRChecker/wiki/Rich-Visuals) to configure and debug easily.                                                                                                        |
-| 🎈 **Lightweight**     | Very minimal core code size.                                                                                                                                                                                     |
-| 🏫 **Large Scale**     | Tested on a large scale at [Technothlon](https://en.wikipedia.org/wiki/Technothlon).                                                                                                                             |
-| 👩🏿‍💻 **Dev Friendly**    | [Pylinted](http://pylint.pycqa.org/) and [Black formatted](https://github.com/psf/black) code. Also has a [developer community](https://discord.gg/qFv2Vqf) on discord.                                          |
-
-Note: For solving interesting challenges, developers can check out [**TODOs**](https://github.com/Udayraj123/OMRChecker/wiki/TODOs).
-
-See the complete guide and details at [Project Wiki](https://github.com/Udayraj123/OMRChecker/wiki/).
-
-<!-- 💁🏿‍♂️ **User Friendly** - WIP, Help by contributing! -->
-
-## 💡 What can OMRChecker do for me?
-
-Once you configure the OMR layout, just throw images of the sheets at the software; and you'll get back the marked responses in an excel sheet!
-
-Images can be taken from various angles as shown below-
+# OMRChecker - Optik İşaretleme Okuma Sistemi
 
 <p align="center">
-	<img alt="sample_input" width="400" src="https://raw.githubusercontent.com/wiki/Udayraj123/OMRChecker/extras/Progress/2019-04-26/images/sample_input.PNG">
+  <img src="https://img.shields.io/badge/Python-3.8+-blue.svg" alt="Python 3.8+">
+  <img src="https://img.shields.io/badge/OpenCV-4.0+-green.svg" alt="OpenCV 4.0+">
+  <img src="https://img.shields.io/badge/Flask-2.3+-red.svg" alt="Flask 2.3+">
+  <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="MIT License">
 </p>
 
-### Code in action on images taken by scanner:
-
-<p align="center">
-	<img alt="document_scanner" height="300" src="https://raw.githubusercontent.com/wiki/Udayraj123/OMRChecker/extras/mini_scripts/outputs/gif/document_scanner.gif">
-
-</p>
-
-### Code in action on images taken by a mobile phone:
-
-<p align="center">
-	<img alt="checking_xeroxed_mobile" height="300" src="https://raw.githubusercontent.com/wiki/Udayraj123/OMRChecker/extras/mini_scripts/outputs/gif/checking_xeroxed_mobile.gif">
-</p>
-
-## Visuals
-
-### Processing steps
-
-See step-by-step processing of any OMR sheet:
-
-<p align="center">
-	<a href="https://github.com/Udayraj123/OMRChecker/wiki/Rich-Visuals">
-		<img alt="rotation_stack" width="650" src="https://raw.githubusercontent.com/wiki/Udayraj123/OMRChecker/extras/Progress/2019-04-26/images/rotation.PNG">
-	</a>
-	<br>
-	*Note: This image is generated by the code itself!*
-</p>
-
-### Output
-
-Get a CSV sheet containing the detected responses and evaluated scores:
-
-<p align="center">
-	<a href="https://github.com/Udayraj123/OMRChecker/wiki/Rich-Visuals">
-		<img alt="csv_output" width="550" src="https://raw.githubusercontent.com/wiki/Udayraj123/OMRChecker/extras/Progress/2019-04-26/images/csv_output.PNG">
-	</a>
-</p>
-
-We now support [colored outputs](https://github.com/Udayraj123/OMRChecker/wiki/%5Bv2%5D-About-Evaluation) as well. Here's a sample output on another image -
-<p align="center">
-	<a href="https://github.com/Udayraj123/OMRChecker/wiki/%5Bv2%5D-About-Evaluation">
-		<img alt="colored_output" width="550" src="./docs/assets/colored_output.jpg">
-	</a>
-</p>
-
-#### There are many more visuals in the wiki. Check them out [here!](https://github.com/Udayraj123/OMRChecker/wiki/Rich-Visuals)
-
-## Getting started
-
-![Setup Time](https://img.shields.io/badge/Setup_Time-20_min-blue.svg)
-
-**Operating system:** OSX or Linux is recommended although Windows is also supported.
-
-### 1. Install global dependencies
-
-![opencv 4.0.0](https://img.shields.io/badge/opencv-4.0.0-blue.svg) ![python 3.5+](https://img.shields.io/badge/python-3.5+-blue.svg)
-
-To check if python3 and pip is already installed:
-
-```bash
-python3 --version
-python3 -m pip --version
-```
-
-<details>
-	<summary><b>Install Python3</b></summary>
-
-To install python3 follow instructions [here](https://www.python.org/downloads/)
-
-To install pip - follow instructions [here](https://pip.pypa.io/en/stable/installation/)
-
-</details>
-<details>
-<summary><b>Install OpenCV</b></summary>
-
-**Any installation method is fine.**
-
-Recommended:
-
-```bash
-python3 -m pip install --user --upgrade pip
-python3 -m pip install --user opencv-python
-python3 -m pip install --user opencv-contrib-python
-```
-
-More details on pip install openCV [here](https://www.pyimagesearch.com/2018/09/19/pip-install-opencv/).
-
-</details>
-
-<details>
-
-<summary><b>Extra steps(for Linux users only)</b></summary>
-
-<b>Installing missing libraries(if any):</b>
-
-On a fresh computer, some of the libraries may get missing in event after a successful pip install. Install them using following commands[(ref)](https://www.pyimagesearch.com/2018/05/28/ubuntu-18-04-how-to-install-opencv/):
-
-```bash
-sudo apt-get install -y build-essential cmake unzip pkg-config
-sudo apt-get install -y libjpeg-dev libpng-dev libtiff-dev
-sudo apt-get install -y libavcodec-dev libavformat-dev libswscale-dev libv4l-dev
-sudo apt-get install -y libatlas-base-dev gfortran
-```
-
-</details>
-
-### 2. Install project dependencies
-
-Clone the repo
-
-```bash
-git clone https://github.com/Udayraj123/OMRChecker
-cd OMRChecker/
-```
-
-Install pip requirements
-
-```bash
-python3 -m pip install --user -r requirements.txt
-```
-
-_**Note:** If you face a distutils error in pip, use `--ignore-installed` flag in above command._
-
-<!-- Wiki should not get cloned -->
-
-### 3. Run the code
-
-1. First copy and examine the sample data to know how to structure your inputs:
-   ```bash
-   cp -r ./samples/sample1 inputs/
-   # Note: you may remove previous inputs (if any) with `mv inputs/* ~/.trash`
-   # Change the number N in sampleN to see more examples
-   ```
-2. Run OMRChecker:
-   ```bash
-   python3 main.py
-   ```
-
-Alternatively you can also use `python3 main.py -i ./samples/sample1`.
-
-Each example in the samples folder demonstrates different ways in which OMRChecker can be used.
-
-### Common Issues
-
-<details>
-<summary>
-	1. [Windows] ERROR: Could not open requirements file<br>
-	</summary>
-Command: <code>python3 -m pip install --user -r requirements.txt</code>
-<br>
-	Link to Solution:  <a href="https://github.com/Udayraj123/OMRChecker/issues/54#issuecomment-1264569006">#54</a>
-</details>
-<details>
-<summary>
-2. [Linux] ERROR: No module named pip<br>
-</summary>
-Command: <code>python3 -m pip install --user --upgrade pip</code>
-<br>
-	Link to Solution: <a href="https://github.com/Udayraj123/OMRChecker/issues/70#issuecomment-1268094136">#70</a>
-</details>
-
-## OMRChecker for custom OMR Sheets
-
-1. First, [create your own template.json](https://github.com/Udayraj123/OMRChecker/wiki/User-Guide).
-2. Configure the tuning parameters.
-3. Run OMRChecker with appropriate arguments (See full usage).
-<!-- 4. Add answer key( TODO: add answer key/marking scheme guide)  -->
-
-## Full Usage
-
-```
-python3 main.py [--setLayout] [--inputDir dir1] [--outputDir dir1]
-```
-
-Explanation for the arguments:
-
-`--setLayout`: Set up OMR template layout - modify your json file and run again until the template is set.
-
-`--inputDir`: Specify an input directory.
-
-`--outputDir`: Specify an output directory.
-
-<details>
-<summary>
- <b>Deprecation logs</b>
-</summary>
-
-- The old `--noCropping` flag has been replaced with the 'CropPage' plugin in "preProcessors" of the template.json(see [samples](https://github.com/Udayraj123/OMRChecker/tree/master/samples)).
-- The `--autoAlign` flag is deprecated due to low performance on a generic OMR sheet
-- The `--template` flag is deprecated and instead it's recommended to keep the template file at the parent folder containing folders of different images
-</details>
-
-<!-- #### Testing the code
-Datasets to test on :
-Low Quality Dataset(For CV Based methods)) (1.5 GB)
-Standard Quality Dataset(For ML Based methods) (3 GB)
-High Quality Dataset(For custom processing) (6 GB)
--->
-
-## FAQ
-
-<details>
-<summary>
-<b>Why is this software free?</b>
-</summary>
-
-This project was born out of a student-led organization called as [Technothlon](https://technothlon.techniche.org.in). It is a logic-based international school championship organized by students of IIT Guwahati. Being a non-profit organization, and after seeing it work fabulously at such a large scale we decided to share this tool with the world. The OMR checking processes still involves so much tediousness which we aim to reduce dramatically.
-
-We believe in the power of open source! Currently, OMRChecker is in an intermediate stage where only developers can use it. We hope to see it become more user-friendly as well as robust from exposure to different inputs from you all!
-
-[![Open Source](https://badges.frapsoft.com/os/v1/open-source.svg?v=103)](https://github.com/ellerbrock/open-source-badges/)
-
-</details>
-
-<details>
-<summary>
-<b>Can I use this code in my (public) work?</b>
-</summary>
-
-OMRChecker can be forked and modified. You are encouraged to play with it and we would love to see your own projects in action!
-
-It is published under the [MIT license](https://github.com/Udayraj123/OMRChecker/blob/master/LICENSE).
-
-</details>
-
-<details>
-<summary>
-<b>What are the ways to contribute?</b>
-</summary>
-
-<!-- - Help OMRChecker reach more people by giving a star! The Goal is to reach top position for the [OMR Topic](https://github.com/topics/omr) -->
-
-- Join the developer community on [Discord](https://discord.gg/qFv2Vqf) to fix [issues](https://github.com/Udayraj123/OMRChecker/issues) with OMRChecker.
-
-- If this project saved you large costs on OMR Software licenses, or saved efforts to make one. Consider donating an amount of your choice(donate section).
-
-<!-- ![☕](https://miro.medium.com/fit/c/256/256/1*br7aoq_JVfxeg73x5tF_Sw.png) -->
-<!-- [![paypal.me](https://www.paypalobjects.com/en_GB/i/btn/btn_donate_SM.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=Z5BNNK7AVFVH8&source=url) -->
-<!-- https://www.amazon.in/hz/wishlist/ls/3V0TDQBI3T8IL -->
-
-</details>
-
-## Credits
-
-_A Huge thanks to:_
-_**Adrian Rosebrock** for his exemplary blog:_ https://pyimagesearch.com
-
-_**Harrison Kinsley** aka sentdex for his [video tutorials](https://www.youtube.com/watch?v=Z78zbnLlPUA&list=PLQVvvaa0QuDdttJXlLtAJxJetJcqmqlQq) and many other resources._
-
-_**Satya Mallic** for his resourceful blog:_ https://www.learnopencv.com
-
-_And to other amazing people from all over the globe who've made significant improvements in this project._
-
-_Thank you!_
-
-<!--
-OpencV
-matplotlib
-some SO answers from roughworks
-prof
--->
-
-## Related Projects
-
-Here's a snapshot of the [Android OMR Helper App (archived)](https://github.com/Udayraj123/AndroidOMRHelper):
-
-<p align="center">
-	<a href="https://github.com/Udayraj123/AndroidOMRHelper">
-		<img height="300" src="https://raw.githubusercontent.com/wiki/Udayraj123/OMRChecker/extras/Progress/2019-04-26/images/app_flow.PNG">
-	</a>
-</p>
-
-## Stargazers over time
-
-[![Stargazers over time](https://starchart.cc/Udayraj123/OMRChecker.svg)](https://starchart.cc/Udayraj123/OMRChecker)
+OMR (Optik İşaretleme Tanıma) formlarını tarayıcı 🖨️ veya telefon kameranız 📱 ile hızlı ve doğru şekilde okuyun. Bu proje, sınav kağıtlarını, anketleri ve diğer OMR formlarını otomatik olarak değerlendirmenizi sağlar.
 
 ---
 
-<h2 align="center">Made with ❤️ by Awesome Contributors</h2>
+## 📋 İçindekiler
+
+- [OMRChecker - Optik İşaretleme Okuma Sistemi](#omrchecker---optik-işaretleme-okuma-sistemi)
+  - [📋 İçindekiler](#-i̇çindekiler)
+  - [🎯 Özellikler](#-özellikler)
+  - [🖼️ Ekran Görüntüleri](#️-ekran-görüntüleri)
+  - [💻 Sistem Gereksinimleri](#-sistem-gereksinimleri)
+  - [🔧 Kurulum](#-kurulum)
+    - [Windows Kurulumu](#windows-kurulumu)
+    - [Linux Kurulumu](#linux-kurulumu)
+    - [macOS Kurulumu](#macos-kurulumu)
+  - [🚀 Kullanım](#-kullanım)
+    - [Komut Satırı Kullanımı (CLI)](#komut-satırı-kullanımı-cli)
+    - [Web Arayüzü Kullanımı](#web-arayüzü-kullanımı)
+  - [📁 Proje Yapısı](#-proje-yapısı)
+  - [⚙️ Yapılandırma Dosyaları](#️-yapılandırma-dosyaları)
+    - [template.json](#templatejson)
+    - [config.json](#configjson)
+    - [evaluation.json](#evaluationjson)
+  - [🎨 Şablon Oluşturma (Template Editor)](#-şablon-oluşturma-template-editor)
+  - [📊 Sonuçlar ve Çıktılar](#-sonuçlar-ve-çıktılar)
+  - [❓ Sık Sorulan Sorular (SSS)](#-sık-sorulan-sorular-sss)
+  - [🐛 Sorun Giderme](#-sorun-giderme)
+  - [🤝 Katkıda Bulunma](#-katkıda-bulunma)
+  - [📜 Lisans](#-lisans)
+  - [🙏 Teşekkürler](#-teşekkürler)
+
+---
+
+## 🎯 Özellikler
+
+| Özellik | Açıklama |
+|---------|----------|
+| 💯 **Yüksek Doğruluk** | Kaliteli tarama görsellerinde %100'e yakın doğruluk, mobil fotoğraflarda %90+ doğruluk |
+| 💪 **Sağlam Yapı** | Düşük çözünürlük, eğik açı, fotokopi gibi zorlu koşullarda bile çalışır |
+| ⚡ **Hızlı İşleme** | Dakikada 200+ OMR formu işleyebilir |
+| 🎨 **Özelleştirilebilir** | Her türlü OMR şablonu için kolayca yapılandırılabilir |
+| 🖥️ **Web Arayüzü** | Kullanıcı dostu web tabanlı arayüz |
+| 📷 **Tarayıcı Desteği** | TWAIN (Windows) ve SANE (Linux) tarayıcı desteği |
+| 📝 **Şablon Editörü** | Görsel şablon oluşturma aracı |
+| 📊 **Detaylı Raporlama** | CSV, Excel ve görsel çıktılar |
+
+---
+
+## 🖼️ Ekran Görüntüleri
+
+### İşleme Adımları
+<p align="center">
+  <img alt="Processing Steps" width="650" src="https://raw.githubusercontent.com/wiki/Udayraj123/OMRChecker/extras/Progress/2019-04-26/images/rotation.PNG">
+  <br><em>Görüntü işleme adımları (döndürme, kırpma, analiz)</em>
+</p>
+
+### CSV Çıktısı
+<p align="center">
+  <img alt="CSV Output" width="550" src="https://raw.githubusercontent.com/wiki/Udayraj123/OMRChecker/extras/Progress/2019-04-26/images/csv_output.PNG">
+  <br><em>Excel/CSV formatında sonuç çıktısı</em>
+</p>
+
+### Renkli Değerlendirme Çıktısı
+<p align="center">
+  <img alt="Colored Output" width="550" src="./docs/assets/colored_output.jpg">
+  <br><em>Doğru/yanlış işaretlenmiş görsel çıktı</em>
+</p>
+
+---
+
+## 💻 Sistem Gereksinimleri
+
+| Gereksinim | Minimum | Önerilen |
+|------------|---------|----------|
+| **İşletim Sistemi** | Windows 10, Ubuntu 18.04, macOS 10.14 | Windows 11, Ubuntu 22.04, macOS 12+ |
+| **Python** | 3.8 | 3.10+ |
+| **RAM** | 4 GB | 8 GB+ |
+| **Depolama** | 500 MB | 1 GB+ |
+| **OpenCV** | 4.0 | 4.5+ |
+
+---
+
+## 🔧 Kurulum
+
+### Windows Kurulumu
+
+#### 1. Python Kurulumu
+
+1. [Python resmi sitesinden](https://www.python.org/downloads/windows/) Python 3.10+ indirin
+2. Kurulum sırasında **"Add Python to PATH"** seçeneğini işaretleyin
+3. Kurulumu tamamlayın
+
+PowerShell veya CMD'de kontrol edin:
+```powershell
+python --version
+pip --version
+```
+
+#### 2. Projeyi İndirme
+
+```powershell
+# Git ile indirme (önerilen)
+git clone https://github.com/Udayraj123/OMRChecker.git
+cd OMRChecker
+
+# VEYA ZIP olarak indirip çıkartın
+```
+
+#### 3. Sanal Ortam Oluşturma (Önerilen)
+
+```powershell
+# Sanal ortam oluştur
+python -m venv venv
+
+# Sanal ortamı aktifleştir
+.\venv\Scripts\activate
+
+# Aktifleştirildiğinde prompt'ta (venv) görünür
+```
+
+#### 4. Temel Bağımlılıkları Yükleme
+
+```powershell
+# pip'i güncelle
+python -m pip install --upgrade pip
+
+# OpenCV yükle
+pip install opencv-python opencv-contrib-python
+
+# Proje bağımlılıklarını yükle
+pip install -r requirements.txt
+```
+
+#### 5. Web Arayüzü Bağımlılıklarını Yükleme (Opsiyonel)
+
+```powershell
+pip install -r web/requirements.txt
+```
+
+#### 6. Kurulumu Test Etme
+
+```powershell
+# Örnek veri ile test
+python main.py -i samples/sample1
+```
+
+---
+
+### Linux Kurulumu
+
+#### Ubuntu/Debian
+
+##### 1. Sistem Bağımlılıklarını Yükleme
+
+```bash
+# Sistem güncellemesi
+sudo apt update && sudo apt upgrade -y
+
+# Python ve pip yükle
+sudo apt install -y python3 python3-pip python3-venv
+
+# OpenCV için gerekli sistem kütüphaneleri
+sudo apt install -y build-essential cmake unzip pkg-config
+sudo apt install -y libjpeg-dev libpng-dev libtiff-dev
+sudo apt install -y libavcodec-dev libavformat-dev libswscale-dev libv4l-dev
+sudo apt install -y libatlas-base-dev gfortran
+
+# Git yükle (eğer yoksa)
+sudo apt install -y git
+```
+
+##### 2. Projeyi İndirme
+
+```bash
+git clone https://github.com/Udayraj123/OMRChecker.git
+cd OMRChecker
+```
+
+##### 3. Sanal Ortam Oluşturma
+
+```bash
+# Sanal ortam oluştur
+python3 -m venv venv
+
+# Aktifleştir
+source venv/bin/activate
+```
+
+##### 4. Bağımlılıkları Yükleme
+
+```bash
+# pip'i güncelle
+pip install --upgrade pip
+
+# OpenCV yükle
+pip install opencv-python opencv-contrib-python
+
+# Proje bağımlılıklarını yükle
+pip install -r requirements.txt
+```
+
+##### 5. Web Arayüzü Bağımlılıklarını Yükleme (Opsiyonel)
+
+```bash
+pip install -r web/requirements.txt
+
+# SANE tarayıcı desteği için (opsiyonel)
+sudo apt install -y sane sane-utils libsane-dev
+pip install python-sane
+```
+
+##### 6. Kurulumu Test Etme
+
+```bash
+python3 main.py -i samples/sample1
+```
+
+#### Fedora/CentOS/RHEL
+
+```bash
+# Sistem bağımlılıkları
+sudo dnf install -y python3 python3-pip python3-devel
+sudo dnf install -y gcc cmake make
+sudo dnf install -y libjpeg-turbo-devel libpng-devel libtiff-devel
+sudo dnf install -y ffmpeg-devel
+sudo dnf install -y atlas-devel
+
+# Projeyi indirip kurulum
+git clone https://github.com/Udayraj123/OMRChecker.git
+cd OMRChecker
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+#### Arch Linux
+
+```bash
+# Sistem bağımlılıkları
+sudo pacman -S python python-pip opencv hdf5
+
+# Projeyi indirip kurulum
+git clone https://github.com/Udayraj123/OMRChecker.git
+cd OMRChecker
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+---
+
+### macOS Kurulumu
+
+#### 1. Homebrew ve Python Kurulumu
+
+```bash
+# Homebrew yükle (eğer yoksa)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Python yükle
+brew install python@3.10
+```
+
+#### 2. Projeyi İndirme ve Kurulum
+
+```bash
+git clone https://github.com/Udayraj123/OMRChecker.git
+cd OMRChecker
+
+# Sanal ortam
+python3 -m venv venv
+source venv/bin/activate
+
+# Bağımlılıklar
+pip install --upgrade pip
+pip install opencv-python opencv-contrib-python
+pip install -r requirements.txt
+```
+
+---
+
+## 🚀 Kullanım
+
+### Komut Satırı Kullanımı (CLI)
+
+#### Temel Kullanım
+
+```bash
+# Varsayılan inputs/ klasöründeki görüntüleri işle
+python main.py
+
+# Belirli bir klasörü işle
+python main.py -i <klasör_yolu>
+
+# Çoklu klasör işle
+python main.py -i klasör1 klasör2 klasör3
+
+# Çıktı klasörünü belirle
+python main.py -i inputs -o sonuçlar
+```
+
+#### Tüm Komut Satırı Seçenekleri
+
+| Parametre | Kısa | Açıklama |
+|-----------|------|----------|
+| `--inputDir` | `-i` | Girdi klasörü yolu (varsayılan: `inputs/`) |
+| `--outputDir` | `-o` | Çıktı klasörü yolu (varsayılan: `outputs/`) |
+| `--setLayout` | `-l` | Şablon düzenleme modu (template.json ayarları için) |
+| `--autoAlign` | `-a` | Otomatik hizalama (deneysel) |
+| `--debug` | `-d` | Hata ayıklama modu |
+
+#### Örnek Kullanım Senaryoları
+
+**1. Örnek verilerle test:**
+```bash
+# Sample1 - Temel OMR formu
+python main.py -i samples/sample1
+
+# Sample3 - Özel şablon
+python main.py -i samples/sample3
+
+# Sample5 - Çoklu sayfa
+python main.py -i samples/sample5
+```
+
+**2. Kendi formlarınızı işleme:**
+```bash
+# Klasör hazırla
+mkdir -p inputs/sinavim
+
+# Görüntüleri kopyala (JPG, PNG, JPEG desteklenir)
+cp /path/to/taramalar/*.jpg inputs/sinavim/
+
+# template.json dosyasını oluştur veya kopyala
+cp samples/sample1/template.json inputs/sinavim/
+
+# İşle
+python main.py -i inputs/sinavim
+```
+
+**3. Şablon ayarlama modu:**
+```bash
+# Şablonu adım adım ayarla
+python main.py -i inputs/sinavim --setLayout
+```
+
+**4. Detaylı hata ayıklama:**
+```bash
+python main.py -i inputs/sinavim --debug
+```
+
+---
+
+### Web Arayüzü Kullanımı
+
+Web arayüzü, tarayıcı desteği, şablon editörü ve sonuç görüntüleme gibi gelişmiş özellikler sunar.
+
+#### Web Sunucusunu Başlatma
+
+```bash
+# Web klasörüne git
+cd web
+
+# Sunucuyu başlat
+python app.py
+```
+
+Sunucu başladıktan sonra tarayıcınızda açın:
+- **Ana Sayfa:** http://localhost:5000
+- **Tarayıcı:** http://localhost:5000/scanner.html
+- **Şablon Editörü:** http://localhost:5000/template-editor.html
+- **İşleme:** http://localhost:5000/process.html
+
+#### Ortam Değişkenleri
+
+```bash
+# Port değiştirme (varsayılan: 5000)
+set OMR_WEB_PORT=8080       # Windows
+export OMR_WEB_PORT=8080    # Linux/macOS
+
+# Debug modu
+set OMR_WEB_DEBUG=true      # Windows
+export OMR_WEB_DEBUG=true   # Linux/macOS
+```
+
+#### Web Arayüzü Özellikleri
+
+| Sayfa | Özellik |
+|-------|---------|
+| **Ana Sayfa** | Hızlı başlangıç ve navigasyon |
+| **Tarayıcı (Scanner)** | TWAIN/SANE tarayıcı ile doğrudan tarama |
+| **İşleme (Process)** | Dosya yükleme ve toplu işleme |
+| **Şablon Editörü** | Görsel şablon oluşturma ve düzenleme |
+| **Şablonlar** | Kayıtlı şablonları yönetme |
+
+#### Tarayıcı Kullanımı
+
+**Windows (TWAIN):**
+1. Tarayıcınızı bilgisayara bağlayın
+2. Web arayüzünde "Tarayıcı" sayfasına gidin
+3. "Tarayıcı Listele" ile cihazları görün
+4. Tarayıcı seçip "Tara" butonuna tıklayın
+5. ADF (Otomatik Belge Besleyici) varsa seçebilirsiniz
+
+**Linux (SANE):**
+1. SANE kurulumunu yapın: `sudo apt install sane sane-utils`
+2. Tarayıcı izinlerini ayarlayın: `sudo adduser $USER scanner`
+3. Web arayüzünden tarama yapın
+
+---
+
+## 📁 Proje Yapısı
+
+```
+OMRChecker/
+├── main.py                 # Ana giriş noktası (CLI)
+├── requirements.txt        # Python bağımlılıkları
+├── pyproject.toml          # Proje yapılandırması
+│
+├── src/                    # Kaynak kod
+│   ├── core.py             # Ana işleme mantığı
+│   ├── entry.py            # Giriş noktası fonksiyonları
+│   ├── evaluation.py       # Değerlendirme/puanlama
+│   ├── template.py         # Şablon işleme
+│   ├── logger.py           # Loglama
+│   ├── constants/          # Sabitler
+│   ├── defaults/           # Varsayılan değerler
+│   ├── processors/         # Görüntü işleyicileri
+│   │   ├── CropPage.py     # Sayfa kırpma
+│   │   └── CropOnMarkers.py# Marker ile kırpma
+│   ├── schemas/            # JSON şema doğrulama
+│   └── utils/              # Yardımcı fonksiyonlar
+│
+├── web/                    # Web arayüzü
+│   ├── app.py              # Flask sunucusu
+│   ├── requirements.txt    # Web bağımlılıkları
+│   ├── static/             # Statik dosyalar
+│   │   ├── css/            # Stiller
+│   │   ├── js/             # JavaScript
+│   │   ├── index.html      # Ana sayfa
+│   │   ├── scanner.html    # Tarayıcı sayfası
+│   │   ├── process.html    # İşleme sayfası
+│   │   └── template-editor.html  # Şablon editörü
+│   └── services/           # Servis modülleri
+│       ├── omr_service.py  # OMR işleme servisi
+│       └── scanner_service.py  # Tarayıcı servisi
+│
+├── samples/                # Örnek şablonlar
+│   ├── sample1/            # Temel OMR örneği
+│   ├── sample2/            # İleri düzey örnek
+│   ├── sample3/            # Özel alan örneği
+│   ├── sample4-6/          # Diğer örnekler
+│   ├── answer-key/         # Cevap anahtarı örnekleri
+│   └── community/          # Topluluk şablonları
+│
+├── inputs/                 # Girdi klasörü (formlarınızı buraya koyun)
+├── outputs/                # Çıktı klasörü (sonuçlar burada)
+└── docs/                   # Dokümantasyon
+```
+
+---
+
+## ⚙️ Yapılandırma Dosyaları
+
+Her OMR projesi için üç ana yapılandırma dosyası kullanılır:
+
+### template.json
+
+Şablon dosyası, OMR formunun fiziksel düzenini tanımlar.
+
+```json
+{
+  "pageDimensions": [1846, 1500],
+  "bubbleDimensions": [40, 40],
+  "fieldBlocks": {
+    "Roll": {
+      "fieldType": "QTYPE_INT",
+      "fieldLabels": ["roll1..9"],
+      "bubblesGap": 46,
+      "labelsGap": 58,
+      "origin": [225, 282]
+    },
+    "MCQ_Block_Q1": {
+      "fieldType": "QTYPE_MCQ4",
+      "fieldLabels": ["q1..4"],
+      "bubblesGap": 59,
+      "labelsGap": 50,
+      "origin": [121, 860]
+    }
+  },
+  "preProcessors": [
+    {
+      "name": "CropPage",
+      "options": {
+        "morphKernel": [10, 10]
+      }
+    },
+    {
+      "name": "CropOnMarkers",
+      "options": {
+        "relativePath": "omr_marker.jpg",
+        "sheetToMarkerWidthRatio": 17
+      }
+    }
+  ]
+}
+```
+
+#### Şablon Parametreleri
+
+| Parametre | Tür | Açıklama |
+|-----------|-----|----------|
+| `pageDimensions` | [genişlik, yükseklik] | Sayfa boyutları (piksel) |
+| `bubbleDimensions` | [genişlik, yükseklik] | Baloncuk boyutları |
+| `fieldBlocks` | object | Alan blokları tanımları |
+| `preProcessors` | array | Ön işleme adımları |
+| `customLabels` | object | Özel etiket tanımları |
+
+#### Alan Türleri (fieldType)
+
+| Tür | Açıklama | Değerler |
+|-----|----------|----------|
+| `QTYPE_MCQ4` | 4 seçenekli çoktan seçmeli | A, B, C, D |
+| `QTYPE_MCQ5` | 5 seçenekli çoktan seçmeli | A, B, C, D, E |
+| `QTYPE_INT` | Sayısal değer | 0-9 |
+| `QTYPE_ALPHA` | Alfabetik | A-Z |
+
+#### Alan Bloğu Parametreleri
+
+| Parametre | Açıklama |
+|-----------|----------|
+| `origin` | [x, y] - Bloğun başlangıç koordinatı |
+| `fieldLabels` | Alan etiketleri (örn: "q1..10" = q1, q2, ... q10) |
+| `bubblesGap` | Baloncuklar arası yatay boşluk |
+| `labelsGap` | Satırlar arası dikey boşluk |
+| `direction` | "horizontal" veya "vertical" |
+| `bubbleValues` | Özel baloncuk değerleri |
+
+---
+
+### config.json
+
+Görüntü işleme parametrelerini yapılandırır.
+
+```json
+{
+  "dimensions": {
+    "display_height": 2480,
+    "display_width": 1640,
+    "processing_height": 820,
+    "processing_width": 666
+  },
+  "outputs": {
+    "show_image_level": 5
+  }
+}
+```
+
+| Parametre | Açıklama |
+|-----------|----------|
+| `display_height/width` | Görüntüleme boyutları |
+| `processing_height/width` | İşleme boyutları |
+| `show_image_level` | Görsel çıktı detay seviyesi (0-6) |
+
+---
+
+### evaluation.json
+
+Değerlendirme ve puanlama ayarlarını tanımlar.
+
+```json
+{
+  "source_type": "csv",
+  "options": {
+    "answer_key_csv_path": "answer_key.csv",
+    "should_explain_scoring": true
+  },
+  "marking_schemes": {
+    "DEFAULT": {
+      "correct": "1",
+      "incorrect": "0",
+      "unmarked": "0"
+    }
+  }
+}
+```
+
+#### Puanlama Seçenekleri
+
+| Parametre | Açıklama |
+|-----------|----------|
+| `source_type` | "csv" veya "local" |
+| `answer_key_csv_path` | Cevap anahtarı CSV dosyası |
+| `marking_schemes` | Puanlama şemaları |
+| `correct` | Doğru cevap puanı |
+| `incorrect` | Yanlış cevap puanı (negatif olabilir) |
+| `unmarked` | Boş bırakılan puanı |
+
+**Cevap Anahtarı CSV Formatı:**
+```csv
+q1,q2,q3,q4,q5
+A,B,C,D,A
+```
+
+---
+
+## 🎨 Şablon Oluşturma (Template Editor)
+
+Web arayüzündeki Şablon Editörü, görsel olarak OMR şablonları oluşturmanızı sağlar.
+
+### Şablon Editörü Kullanımı
+
+1. **Web sunucusunu başlatın:**
+   ```bash
+   cd web
+   python app.py
+   ```
+
+2. **Şablon editörünü açın:**
+   http://localhost:5000/template-editor.html
+
+3. **Boş bir OMR formu yükleyin:**
+   - "Görsel Seç" butonu ile formunuzu yükleyin
+   - Görüntü canvas üzerinde görünecektir
+
+4. **Alan blokları ekleyin:**
+   - Canvas üzerinde fare ile sürükleyerek alan seçin
+   - Sağ panelde alan özelliklerini ayarlayın:
+     - **Alan Adı:** Benzersiz alan ismi
+     - **Alan Türü:** MCQ4, MCQ5, INT, ALPHA
+     - **Satır Sayısı:** Soru sayısı
+     - **Sütun Sayısı:** Seçenek sayısı
+     - **Baloncuk Boyutu:** Genişlik x Yükseklik
+
+5. **İnce ayar yapın:**
+   - Koordinatları elle düzenleyin
+   - Boşlukları ayarlayın
+   - Önizleme ile kontrol edin
+
+6. **Şablonu kaydedin:**
+   - "Kaydet" butonu ile template.json oluşturun
+   - samples/ klasörüne yeni şablon kaydedin
+
+### Şablon Oluşturma İpuçları
+
+- ✅ Yüksek çözünürlüklü tarama kullanın (300 DPI önerilen)
+- ✅ Düz ve gölgesiz tarama yapın
+- ✅ Marker'ları (köşe işaretleri) net tutun
+- ✅ Önce küçük bir örnekle test edin
+- ❌ Eğri veya buruşuk formlar kullanmayın
+- ❌ Çok düşük çözünürlük kullanmayın
+
+---
+
+## 📊 Sonuçlar ve Çıktılar
+
+İşleme sonrasında `outputs/` klasöründe şu dosyalar oluşur:
+
+| Dosya | Açıklama |
+|-------|----------|
+| `Results_*.csv` | Tüm sonuçları içeren CSV dosyası |
+| `MultiMarked/` | Birden fazla işaretlenen formlar |
+| `Errors/` | Hatalı işlenen formlar |
+| `CheckedOMRs/` | İşaretlenmiş görsel çıktılar |
+
+### CSV Çıktı Formatı
+
+```csv
+file_id,Roll,q1,q2,q3,q4,q5,...,score
+form1.jpg,123456789,A,B,C,D,A,...,85
+form2.jpg,123456790,B,B,C,A,D,...,75
+```
+
+### Görsel Çıktılar
+
+- **Yeşil:** Doğru işaretleme
+- **Kırmızı:** Yanlış işaretleme
+- **Mavi:** Algılanan işaretleme
+- **Sarı:** Çoklu işaretleme
+
+---
+
+## ❓ Sık Sorulan Sorular (SSS)
+
+<details>
+<summary><b>1. Hangi görüntü formatları destekleniyor?</b></summary>
+
+JPG, JPEG, PNG, BMP, TIFF formatları desteklenir. Önerilen format JPG'dir.
+</details>
+
+<details>
+<summary><b>2. Minimum görüntü çözünürlüğü nedir?</b></summary>
+
+Minimum 640x480 piksel. Önerilen 1500x2000 piksel veya üzeri (300 DPI tarama).
+</details>
+
+<details>
+<summary><b>3. Mobil kamera ile çekilen fotoğraflar kullanılabilir mi?</b></summary>
+
+Evet! Ancak şu noktalara dikkat edin:
+- Formu düz tutun ve paralaks hatası oluşturmayın
+- İyi aydınlatma kullanın
+- Yeterli çözünürlükte çekin
+</details>
+
+<details>
+<summary><b>4. Eğik taranmış formlar düzeltilebilir mi?</b></summary>
+
+Evet, `CropOnMarkers` preprocessor otomatik olarak eğriyi düzeltir. Bunun için formunuzda marker'lar (köşe işaretleri) olmalıdır.
+</details>
+
+<details>
+<summary><b>5. Kendi OMR formumu nasıl tasarlarım?</b></summary>
+
+1. Tutarlı baloncuk boyutları kullanın
+2. Köşelere marker (kare veya daire) ekleyin
+3. Baloncuklar arası mesafeyi eşit tutun
+4. Yüksek kontrast renkler kullanın (siyah-beyaz ideal)
+</details>
+
+<details>
+<summary><b>6. Yazılım ücretsiz mi?</b></summary>
+
+Evet! MIT lisansı ile tamamen ücretsiz ve açık kaynaklıdır.
+</details>
+
+---
+
+## 🐛 Sorun Giderme
+
+### Windows Sorunları
+
+<details>
+<summary><b>ERROR: Could not open requirements file</b></summary>
+
+**Çözüm:**
+```powershell
+# Dosya yolunu tam belirtin
+pip install -r C:\path\to\OMRChecker\requirements.txt
+
+# VEYA klasörde olduğunuzdan emin olun
+cd C:\path\to\OMRChecker
+pip install -r requirements.txt
+```
+</details>
+
+<details>
+<summary><b>python3 komutu bulunamıyor</b></summary>
+
+**Çözüm:** Windows'ta `python3` yerine `python` kullanın:
+```powershell
+python main.py -i samples/sample1
+```
+</details>
+
+<details>
+<summary><b>TWAIN tarayıcı görünmüyor</b></summary>
+
+**Çözüm:**
+1. Tarayıcı sürücüsünün yüklü olduğundan emin olun
+2. 32-bit Python kullanıyorsanız 32-bit sürücü, 64-bit için 64-bit sürücü gerekir
+3. pytwain paketini yeniden yükleyin: `pip install --upgrade pytwain`
+</details>
+
+### Linux Sorunları
+
+<details>
+<summary><b>No module named pip</b></summary>
+
+**Çözüm:**
+```bash
+sudo apt install python3-pip
+# veya
+curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+python3 get-pip.py
+```
+</details>
+
+<details>
+<summary><b>OpenCV import hatası</b></summary>
+
+**Çözüm:**
+```bash
+# Eksik kütüphaneleri yükleyin
+sudo apt install libgl1-mesa-glx libglib2.0-0
+
+# OpenCV'yi yeniden yükleyin
+pip uninstall opencv-python opencv-contrib-python
+pip install opencv-python opencv-contrib-python
+```
+</details>
+
+<details>
+<summary><b>SANE tarayıcı izin hatası</b></summary>
+
+**Çözüm:**
+```bash
+# Kullanıcıyı scanner grubuna ekle
+sudo usermod -aG scanner $USER
+
+# Oturumu kapatıp açın veya
+newgrp scanner
+```
+</details>
+
+### Genel Sorunlar
+
+<details>
+<summary><b>Boş sonuç çıktısı</b></summary>
+
+**Olası nedenler:**
+1. Şablon koordinatları yanlış
+2. Görüntü boyutu uyumsuz
+3. Baloncuklar algılanmıyor
+
+**Çözüm:**
+1. `--setLayout` ile şablonu kontrol edin
+2. `show_image_level: 6` ile detaylı görsel çıktı alın
+3. Görüntü boyutlarını template.json ile eşleştirin
+</details>
+
+<details>
+<summary><b>Düşük doğruluk oranı</b></summary>
+
+**İyileştirme önerileri:**
+1. Daha yüksek çözünürlük kullanın
+2. Tarama kalitesini artırın
+3. Şablon koordinatlarını ince ayar yapın
+4. Eşik değerlerini ayarlayın
+</details>
+
+---
+
+## 🤝 Katkıda Bulunma
+
+Projeye katkıda bulunmak için:
+
+1. Projeyi fork edin
+2. Feature branch oluşturun: `git checkout -b feature/yeni-ozellik`
+3. Değişikliklerinizi commit edin: `git commit -am 'Yeni özellik eklendi'`
+4. Branch'i push edin: `git push origin feature/yeni-ozellik`
+5. Pull Request oluşturun
+
+Detaylı bilgi için [CONTRIBUTING.md](CONTRIBUTING.md) dosyasını inceleyin.
+
+### Geliştirici Kurulumu
+
+```bash
+# Geliştirme bağımlılıklarını yükle
+pip install -r requirements.dev.txt
+
+# Pre-commit hookları ayarla
+pre-commit install
+
+# Testleri çalıştır
+pytest
+
+# Kod stilini kontrol et
+pylint src/
+black --check .
+```
+
+---
+
+## 📜 Lisans
+
+Bu proje [MIT Lisansı](LICENSE) altında yayınlanmıştır.
+
+```
+MIT License
+
+Copyright (c) 2019 Udayraj Deshmukh
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction...
+```
+
+---
+
+## 🙏 Teşekkürler
+
+Bu projenin geliştirilmesinde emeği geçen herkese teşekkürler:
+
+- **Adrian Rosebrock** - [PyImageSearch](https://pyimagesearch.com)
+- **Harrison Kinsley (Sentdex)** - Video eğitimleri
+- **Satya Mallic** - [LearnOpenCV](https://www.learnopencv.com)
+- Tüm katkıda bulunanlar ve topluluk üyeleri
 
 <a href="https://github.com/Udayraj123/OMRChecker/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=Udayraj123/OMRChecker" />
@@ -343,17 +902,12 @@ Here's a snapshot of the [Android OMR Helper App (archived)](https://github.com/
 
 ---
 
-### License
+<p align="center">
+  <b>⭐ Bu projeyi beğendiyseniz yıldız vermeyi unutmayın! ⭐</b>
+</p>
 
-[![GitHub license](https://img.shields.io/github/license/Udayraj123/OMRChecker.svg)](https://github.com/Udayraj123/OMRChecker/blob/master/LICENSE)
-
-For more details see [LICENSE](https://github.com/Udayraj123/OMRChecker/blob/master/LICENSE).
-
-### Donate
-
-<a href="https://www.buymeacoffee.com/Udayraj123" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a> [![paypal](https://www.paypalobjects.com/en_GB/i/btn/btn_donate_LG.gif)](https://www.paypal.me/Udayraj123/500)
-
-_Find OMRChecker on_ [**_Product Hunt_**](https://www.producthunt.com/posts/omr-checker/) **|** [**_Reddit_**](https://www.reddit.com/r/computervision/comments/ccbj6f/omrchecker_grade_exams_using_python_and_opencv/) **|** [**Discord**](https://discord.gg/qFv2Vqf) **|** [**Linkedin**](https://www.linkedin.com/pulse/open-source-talks-udayraj-udayraj-deshmukh/) **|** [**goodfirstissue.dev**](https://goodfirstissue.dev/language/python) **|** [**codepeak.tech**](https://www.codepeak.tech/) **|** [**fossoverflow.dev**](https://fossoverflow.dev/projects) **|** [**Interview on Console by CodeSee**](https://console.substack.com/p/console-140) **|** [**Open Source Hub**](https://opensourcehub.io/udayraj123/omrchecker)
-
- <!-- [***Hacker News***](https://news.ycombinator.com/item?id=20420602) **|** -->
- <!-- **|** [***Swyya***](https://www.swyya.com/projects/omrchecker) -->
+<p align="center">
+  <a href="https://github.com/Udayraj123/OMRChecker/issues">Hata Bildir</a> •
+  <a href="https://github.com/Udayraj123/OMRChecker/discussions">Tartışma</a> •
+  <a href="https://discord.gg/qFv2Vqf">Discord</a>
+</p>

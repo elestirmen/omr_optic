@@ -14,6 +14,7 @@ const scanBtn = document.getElementById('scan-btn');
 const cancelBtn = document.getElementById('cancel-btn');
 const useAdfCheckbox = document.getElementById('use-adf');
 const autoProcessCheckbox = document.getElementById('auto-process');
+const showUiCheckbox = document.getElementById('show-ui');
 const scanTemplateSelect = document.getElementById('scan-template');
 const scanStatus = document.getElementById('scan-status');
 const scanProgress = document.getElementById('scan-progress');
@@ -156,6 +157,10 @@ async function startScan() {
         return;
     }
 
+    const deviceId = /^\d+$/.test(String(selectedDevice))
+        ? parseInt(String(selectedDevice), 10)
+        : selectedDevice;
+
     isScanning = true;
     scanBtn.style.display = 'none';
     cancelBtn.style.display = 'block';
@@ -174,9 +179,10 @@ async function startScan() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                device_id: selectedDevice,
+                device_id: deviceId,
                 use_adf: useAdfCheckbox.checked,
                 auto_process: autoProcessCheckbox.checked,
+                show_ui: showUiCheckbox ? showUiCheckbox.checked : true,
                 template_id: scanTemplateSelect.value || null
             })
         });
@@ -222,6 +228,20 @@ async function pollScanStatus() {
     try {
         const response = await fetch(`${API_BASE}/api/scanner/status`);
         const data = await response.json();
+
+        if (data.cancelled) {
+            isScanning = false;
+            scanBtn.style.display = 'block';
+            cancelBtn.style.display = 'none';
+            scanProgress.style.display = 'none';
+            resetScanUI();
+            return;
+        }
+
+        if (data.error) {
+            showScanError(data.error);
+            return;
+        }
 
         if (data.pages_scanned > 0) {
             updateScanProgress(data.pages_scanned);
@@ -277,9 +297,15 @@ function completeScan(data) {
     cancelBtn.style.display = 'none';
     scanProgress.style.display = 'none';
 
+    const scannedCount = data.pages_scanned || 0;
+    if (scannedCount <= 0) {
+        showScanError('Hiç sayfa taranmadı. Tarayıcıda kağıt/ADF olduğundan emin olun ve tekrar deneyin.');
+        return;
+    }
+
     // Show results
-    document.getElementById('total-scanned').textContent = data.pages_scanned || 0;
-    document.getElementById('total-processed').textContent = data.pages_scanned || 0;
+    document.getElementById('total-scanned').textContent = scannedCount;
+    document.getElementById('total-processed').textContent = scannedCount;
     scanResults.style.display = 'block';
 
     // Update links

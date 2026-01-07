@@ -52,7 +52,7 @@ class OMRService:
         args = {
             'debug': False,
             'output_dir': str(output_folder),
-            'autoAlign': False,
+            'autoAlign': True,
             'setLayout': False,
         }
         

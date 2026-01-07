@@ -4,12 +4,33 @@
 
 const API_BASE = '';
 let uploadedFiles = [];
+let uploadedFileKeys = new Set();
 let sessionId = null;
 let templateFromUrl = null;
+
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tif', '.tiff']);
+
+function getDisplayName(file) {
+    return file.webkitRelativePath || file.name || '';
+}
+
+function getFileKey(file) {
+    return `${getDisplayName(file)}::${file.size}::${file.lastModified}`;
+}
+
+function isImageFile(file) {
+    if (file?.type && file.type.startsWith('image/')) return true;
+    const name = (file?.name || '').toLowerCase();
+    for (const ext of IMAGE_EXTENSIONS) {
+        if (name.endsWith(ext)) return true;
+    }
+    return false;
+}
 
 // DOM Elements
 const dropzone = document.getElementById('dropzone');
 const fileInput = document.getElementById('file-input');
+const folderInput = document.getElementById('folder-input');
 const fileItems = document.getElementById('file-items');
 const clearFilesBtn = document.getElementById('clear-files');
 const processBtn = document.getElementById('process-btn');
@@ -86,6 +107,10 @@ function setupFileInput() {
     fileInput.addEventListener('change', (e) => {
         handleFiles(e.target.files);
     });
+
+    folderInput?.addEventListener('change', (e) => {
+        handleFiles(e.target.files);
+    });
 }
 
 // Button setup
@@ -97,13 +122,13 @@ function setupButtons() {
 
 // Handle file selection
 function handleFiles(files) {
-    const imageFiles = Array.from(files).filter(file =>
-        file.type.startsWith('image/')
-    );
+    const imageFiles = Array.from(files).filter(isImageFile);
 
     imageFiles.forEach(file => {
-        if (!uploadedFiles.some(f => f.name === file.name && f.size === file.size)) {
+        const key = getFileKey(file);
+        if (!uploadedFileKeys.has(key)) {
             uploadedFiles.push(file);
+            uploadedFileKeys.add(key);
         }
     });
 
@@ -126,7 +151,7 @@ function updateFileList() {
         <div class="file-item">
             <div class="file-item-name">
                 <span>📄</span>
-                <span>${file.name}</span>
+                <span>${getDisplayName(file)}</span>
             </div>
             <span class="file-item-size">${formatFileSize(file.size)}</span>
             <span class="file-item-remove" onclick="removeFile(${index})">✕</span>
@@ -136,7 +161,8 @@ function updateFileList() {
 
 // Remove file from list
 function removeFile(index) {
-    uploadedFiles.splice(index, 1);
+    const removed = uploadedFiles.splice(index, 1)[0];
+    if (removed) uploadedFileKeys.delete(getFileKey(removed));
     updateFileList();
 }
 
@@ -144,6 +170,8 @@ function removeFile(index) {
 function clearFiles() {
     uploadedFiles = [];
     fileInput.value = '';
+    folderInput.value = '';
+    uploadedFileKeys.clear();
     updateFileList();
 }
 
@@ -154,6 +182,76 @@ function formatFileSize(bytes) {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+const MAX_UPLOAD_BYTES_PER_REQUEST = 30 * 1024 * 1024; // keep well under server 50MB limit
+const MAX_FILES_PER_REQUEST = 30;
+
+function chunkFilesForUpload(files) {
+    const chunks = [];
+    let current = [];
+    let currentBytes = 0;
+
+    for (const file of files) {
+        const fileBytes = file?.size || 0;
+        const wouldExceedBytes = currentBytes + fileBytes > MAX_UPLOAD_BYTES_PER_REQUEST;
+        const wouldExceedCount = current.length >= MAX_FILES_PER_REQUEST;
+
+        if (current.length > 0 && (wouldExceedBytes || wouldExceedCount)) {
+            chunks.push(current);
+            current = [];
+            currentBytes = 0;
+        }
+
+        current.push(file);
+        currentBytes += fileBytes;
+    }
+
+    if (current.length > 0) chunks.push(current);
+    return chunks;
+}
+
+async function readJsonResponse(response) {
+    const text = await response.text();
+    try {
+        return JSON.parse(text);
+    } catch {
+        return { error: text };
+    }
+}
+
+async function uploadFilesInChunks(files) {
+    const chunks = chunkFilesForUpload(files);
+    let sid = null;
+
+    for (let i = 0; i < chunks.length; i++) {
+        progressText.textContent = `Dosyalar yukleniyor... (${i + 1}/${chunks.length})`;
+        progressFill.style.width = `${Math.round((i / chunks.length) * 40)}%`;
+
+        const formData = new FormData();
+        if (sid) formData.append('session_id', sid);
+
+        chunks[i].forEach(file => {
+            const filename = getDisplayName(file) || file.name;
+            formData.append('files', file, filename);
+        });
+
+        const uploadResponse = await fetch(`${API_BASE}/api/upload`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const uploadData = await readJsonResponse(uploadResponse);
+
+        if (!uploadResponse.ok || !uploadData.success) {
+            throw new Error(uploadData.error || uploadResponse.statusText || 'Upload failed');
+        }
+
+        sid = uploadData.session_id;
+        progressFill.style.width = `${Math.round(((i + 1) / chunks.length) * 40)}%`;
+    }
+
+    return sid;
+}
+
 // Process files
 async function processFiles() {
     if (uploadedFiles.length === 0) return;
@@ -161,29 +259,14 @@ async function processFiles() {
     processBtn.disabled = true;
     progressSection.style.display = 'block';
     progressFill.style.width = '0%';
+    progressFill.style.background = '';
     progressText.textContent = 'Dosyalar yükleniyor...';
 
     try {
-        // Upload files
-        const formData = new FormData();
-        uploadedFiles.forEach(file => {
-            formData.append('files', file);
-        });
-
-        progressFill.style.width = '30%';
-
-        const uploadResponse = await fetch(`${API_BASE}/api/upload`, {
-            method: 'POST',
-            body: formData
-        });
-
-        const uploadData = await uploadResponse.json();
-
-        if (!uploadData.success) {
-            throw new Error(uploadData.error || 'Upload failed');
-        }
-
-        sessionId = uploadData.session_id;
+        const filesToUpload = [...uploadedFiles].sort((a, b) =>
+            getDisplayName(a).localeCompare(getDisplayName(b))
+        );
+        sessionId = await uploadFilesInChunks(filesToUpload);
         progressFill.style.width = '50%';
         progressText.textContent = 'OMR işleniyor...';
 
