@@ -41,6 +41,7 @@ const progressText = document.getElementById('progress-text');
 const resultsContainer = document.getElementById('results-container');
 const resultsTableContainer = document.getElementById('results-table-container');
 const downloadCsvBtn = document.getElementById('download-csv');
+const downloadExcelBtn = document.getElementById('download-excel');
 const processedImages = document.getElementById('processed-images');
 const imageGrid = document.getElementById('image-grid');
 
@@ -118,6 +119,7 @@ function setupButtons() {
     clearFilesBtn.addEventListener('click', clearFiles);
     processBtn.addEventListener('click', processFiles);
     downloadCsvBtn.addEventListener('click', downloadCSV);
+    downloadExcelBtn?.addEventListener('click', downloadExcel);
 }
 
 // Handle file selection
@@ -342,6 +344,7 @@ function displayResults(data) {
     // Enable CSV download
     if (data.csv_available) {
         downloadCsvBtn.disabled = false;
+        if (downloadExcelBtn) downloadExcelBtn.disabled = false;
     }
 }
 
@@ -392,6 +395,12 @@ function closeModal() {
 function downloadCSV() {
     if (sessionId) {
         window.open(`${API_BASE}/api/results/${sessionId}/csv`, '_blank');
+    }
+}
+
+function downloadExcel() {
+    if (sessionId) {
+        window.open(`${API_BASE}/api/results/${sessionId}/excel`, '_blank');
     }
 }
 

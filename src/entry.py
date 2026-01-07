@@ -177,6 +177,7 @@ def process_dir(
                 evaluation_config,
                 outputs_namespace,
             )
+            export_excel_results(outputs_namespace.files_obj.get("Results"))
 
     elif not subdirs:
         # Each subdirectory should have images or should be non-leaf
@@ -252,8 +253,6 @@ def process_files(
             if check_and_move(ERROR_CODES.NO_MARKER_ERR, file_path, new_file_path):
                 err_line = [
                     file_name,
-                    file_path.as_posix(),
-                    new_file_path.as_posix(),
                     "NA",
                 ] + outputs_namespace.empty_resp
                 pd.DataFrame(err_line, dtype=str).T.to_csv(
@@ -324,8 +323,6 @@ def process_files(
             # Enter into Results sheet-
             results_line = [
                 file_name,
-                file_path.as_posix(),
-                new_file_path.as_posix(),
                 score,
             ] + resp_array
             # Write/Append to results_line file(opened in append mode)
@@ -343,8 +340,6 @@ def process_files(
             if check_and_move(ERROR_CODES.MULTI_BUBBLE_WARN, file_path, new_file_path):
                 mm_line = [
                     file_name,
-                    file_path.as_posix(),
-                    new_file_path.as_posix(),
                     "NA",
                 ] + resp_array
                 pd.DataFrame(mm_line, dtype=str).T.to_csv(
@@ -395,3 +390,23 @@ def print_stats(start_time, files_counter, tuning_config):
         log(
             "\nTip: To see some awesome visuals, open config.json and increase 'show_image_level'"
         )
+
+
+def export_excel_results(results_csv_path):
+    """Create an XLSX export next to the results CSV (best-effort)."""
+    if not results_csv_path:
+        return
+
+    try:
+        import openpyxl  # noqa: F401
+    except Exception:
+        logger.warning("openpyxl is not installed; skipping Excel export")
+        return
+
+    try:
+        xlsx_path = str(results_csv_path).rsplit(".", 1)[0] + ".xlsx"
+        df = pd.read_csv(results_csv_path, dtype=str, na_filter=False)
+        df.to_excel(xlsx_path, index=False, engine="openpyxl")
+        logger.info(f"Excel export created: '{xlsx_path}'")
+    except Exception as e:
+        logger.warning(f"Failed to export Excel: {e}")

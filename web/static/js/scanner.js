@@ -311,12 +311,18 @@ function completeScan(data) {
     // Update links
     const viewResultsBtn = document.getElementById('view-results-btn');
     const downloadResultsBtn = document.getElementById('download-results-btn');
+    const downloadExcelBtn = document.getElementById('download-excel-btn');
 
     if (data.session_id) {
         viewResultsBtn.href = `process.html?session=${data.session_id}`;
         downloadResultsBtn.onclick = () => {
             window.open(`${API_BASE}/api/results/${data.session_id}/csv`, '_blank');
         };
+        if (downloadExcelBtn) {
+            downloadExcelBtn.onclick = () => {
+                window.open(`${API_BASE}/api/results/${data.session_id}/excel`, '_blank');
+            };
+        }
     }
 
     // Save to recent sessions

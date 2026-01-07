@@ -126,6 +126,33 @@ class OMRService:
         if kind not in csv_map:
             raise FileNotFoundError(f"No CSV kind '{kind}' found for session {session_id}")
         return csv_map[kind]
+
+    @staticmethod
+    def _strip_internal_columns(df):
+        """Remove internal columns that shouldn't be exported to users."""
+        try:
+            cols_lower = {c.lower(): c for c in df.columns}
+            to_drop = []
+            for internal in ("input_path", "output_path"):
+                if internal in cols_lower:
+                    to_drop.append(cols_lower[internal])
+            if to_drop:
+                df = df.drop(columns=to_drop)
+        except Exception:
+            pass
+        return df
+
+    def read_results_dataframe(self, session_id: str, kind: Optional[str] = None):
+        """Read a session CSV into a pandas DataFrame (strings) with internal columns stripped."""
+        csv_path = (
+            self.get_csv_path_by_kind(session_id, kind)
+            if kind
+            else self.get_csv_path(session_id)
+        )
+        import pandas as pd
+
+        df = pd.read_csv(csv_path, dtype=str, na_filter=False)
+        return self._strip_internal_columns(df)
     
     def list_templates(self) -> List[Dict[str, Any]]:
         """List available templates"""
@@ -389,7 +416,8 @@ class OMRService:
             import pandas as pd
 
             def read_df(p: Path):
-                return pd.read_csv(p, dtype=str, na_filter=False)
+                df = pd.read_csv(p, dtype=str, na_filter=False)
+                return self._strip_internal_columns(df)
 
             for kind, path in csv_map.items():
                 dfs[kind] = read_df(path)

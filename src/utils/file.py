@@ -64,8 +64,6 @@ def setup_outputs_for_template(paths, template):
     ns.empty_resp = [""] * len(template.output_columns)
     ns.sheetCols = [
         "file_id",
-        "input_path",
-        "output_path",
         "score",
     ] + template.output_columns
     ns.OUTPUT_SET = []

@@ -9,6 +9,7 @@ import os
 import sys
 import uuid
 import shutil
+import io
 from pathlib import Path
 from datetime import datetime
 
@@ -183,12 +184,40 @@ def download_csv(session_id):
     """Download results as CSV"""
     try:
         kind = request.args.get("kind")
-        csv_path = (
-            omr_service.get_csv_path_by_kind(session_id, kind)
-            if kind
-            else omr_service.get_csv_path(session_id)
+        df = omr_service.read_results_dataframe(session_id, kind)
+        csv_text = df.to_csv(index=False)
+        buf = io.BytesIO(csv_text.encode("utf-8-sig"))
+        return send_file(
+            buf,
+            mimetype="text/csv; charset=utf-8",
+            as_attachment=True,
+            download_name=f"results_{session_id}.csv",
         )
-        return send_file(csv_path, as_attachment=True, download_name=f'results_{session_id}.csv')
+    except FileNotFoundError:
+        return jsonify({'error': 'Results not found'}), 404
+
+
+@app.route('/api/results/<session_id>/excel', methods=['GET'])
+def download_excel(session_id):
+    """Download results as Excel (XLSX)."""
+    try:
+        kind = request.args.get("kind")
+        df = omr_service.read_results_dataframe(session_id, kind)
+
+        try:
+            import openpyxl  # noqa: F401
+        except Exception:
+            return jsonify({'error': 'Excel export requires openpyxl. Install web/requirements.txt.'}), 500
+
+        buf = io.BytesIO()
+        df.to_excel(buf, index=False, engine="openpyxl")
+        buf.seek(0)
+        return send_file(
+            buf,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            as_attachment=True,
+            download_name=f"results_{session_id}.xlsx",
+        )
     except FileNotFoundError:
         return jsonify({'error': 'Results not found'}), 404
 

@@ -9,6 +9,9 @@ eventlet>=0.33.0
 # Image processing (already in main project, but needed for web)
 pillow>=10.0.0
 
+# Excel export
+openpyxl>=3.1.0
+
 # Windows TWAIN scanner support
 pytwain>=2.1.0; platform_system=="Windows"
 
