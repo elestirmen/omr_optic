@@ -10,6 +10,7 @@ import sys
 import uuid
 import shutil
 import io
+import json
 from pathlib import Path
 from datetime import datetime
 
@@ -268,13 +269,28 @@ def get_template_asset(template_id, filename):
 @app.route('/api/templates', methods=['POST'])
 def create_template():
     """Create a new template"""
-    data = request.get_json()
+    data = None
+    image_file = None
+
+    if request.is_json:
+        data = request.get_json(silent=True)
+    else:
+        raw = request.form.get('template') or request.form.get('data')
+        if raw:
+            try:
+                data = json.loads(raw)
+            except Exception:
+                return jsonify({'error': 'Invalid template JSON in form field'}), 400
+        image_file = request.files.get('image')
+
     if not data:
         return jsonify({'error': 'Template data required'}), 400
-    
+
     try:
-        result = omr_service.create_template(data)
+        result = omr_service.create_template(data, image_file=image_file)
         return jsonify(result)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -282,15 +298,30 @@ def create_template():
 @app.route('/api/templates/<template_id>', methods=['PUT'])
 def update_template(template_id):
     """Update an existing template"""
-    data = request.get_json()
+    data = None
+    image_file = None
+
+    if request.is_json:
+        data = request.get_json(silent=True)
+    else:
+        raw = request.form.get('template') or request.form.get('data')
+        if raw:
+            try:
+                data = json.loads(raw)
+            except Exception:
+                return jsonify({'error': 'Invalid template JSON in form field'}), 400
+        image_file = request.files.get('image')
+
     if not data:
         return jsonify({'error': 'Template data required'}), 400
 
     try:
-        result = omr_service.update_template(template_id, data)
+        result = omr_service.update_template(template_id, data, image_file=image_file)
         return jsonify(result)
     except FileNotFoundError:
         return jsonify({'error': 'Template not found'}), 404
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

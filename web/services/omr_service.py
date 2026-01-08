@@ -20,6 +20,10 @@ from src.entry import entry_point, process_dir
 
 class OMRService:
     """Service class for OMR processing operations"""
+
+    _TEMPLATE_IMAGE_STEM = "template_image"
+    _ALLOWED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff"}
+    _MAX_TEMPLATE_IMAGE_BYTES = 15 * 1024 * 1024  # 15MB
     
     def __init__(self, upload_folder: Path, results_folder: Path):
         self.upload_folder = Path(upload_folder)
@@ -168,6 +172,8 @@ class OMRService:
                     try:
                         with open(template_file, 'r', encoding='utf-8') as f:
                             template_data = json.load(f)
+
+                        image_asset = self._get_template_image_asset(item)
                         
                         templates.append({
                             'id': item.name,
@@ -175,7 +181,8 @@ class OMRService:
                             'path': str(template_file),
                             'pageDimensions': template_data.get('pageDimensions', []),
                             'fieldBlocks': list(template_data.get('fieldBlocks', {}).keys()),
-                            'hasMarker': (item / 'omr_marker.jpg').exists()
+                            'hasMarker': (item / 'omr_marker.jpg').exists(),
+                            'hasImage': image_asset is not None,
                         })
                     except Exception:
                         pass
@@ -194,16 +201,24 @@ class OMRService:
         
         template_data['id'] = template_id
         template_data['path'] = str(template_path)
+
+        image_asset = self._get_template_image_asset(template_path.parent)
+        template_data["imageAsset"] = image_asset
+        template_data["imageUrl"] = (
+            f"/api/templates/{template_id}/asset/{image_asset}" if image_asset else None
+        )
         
         return template_data
     
-    def create_template(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def create_template(self, data: Dict[str, Any], image_file=None) -> Dict[str, Any]:
         """Create a new template"""
         name = data.get('name', f'template_{datetime.now().strftime("%Y%m%d_%H%M%S")}')
         template_folder = self.samples_folder / name
         template_folder.mkdir(parents=True, exist_ok=True)
         
         template_path = template_folder / 'template.json'
+
+        prepared_image = self._prepare_template_image(image_file) if image_file else None
         
         # Remove non-template fields
         template_data = {k: v for k, v in data.items() if k != 'name'}
@@ -221,6 +236,10 @@ class OMRService:
         except Exception:
             # Non-fatal: template can still be used with defaults.
             pass
+
+        if prepared_image:
+            raw, ext = prepared_image
+            self._write_template_image(template_folder, raw, ext)
         
         return {
             'success': True,
@@ -228,12 +247,14 @@ class OMRService:
             'path': str(template_path)
         }
 
-    def update_template(self, template_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    def update_template(self, template_id: str, data: Dict[str, Any], image_file=None) -> Dict[str, Any]:
         """Update an existing template in samples/<template_id>/template.json."""
         template_folder = self.samples_folder / template_id
         template_path = template_folder / "template.json"
         if not template_path.exists():
             raise FileNotFoundError(f"Template {template_id} not found")
+
+        prepared_image = self._prepare_template_image(image_file) if image_file else None
 
         # Remove UI/meta fields and normalize to a valid template payload.
         template_data = {
@@ -253,7 +274,93 @@ class OMRService:
         except Exception:
             pass
 
+        if prepared_image:
+            raw, ext = prepared_image
+            self._write_template_image(template_folder, raw, ext)
+
         return {"success": True, "id": template_id, "path": str(template_path)}
+
+    def _get_template_image_asset(self, template_folder: Path) -> Optional[str]:
+        """Return template image asset filename if present."""
+        try:
+            template_folder = Path(template_folder)
+        except Exception:
+            return None
+        if not template_folder.exists():
+            return None
+        try:
+            for item in template_folder.iterdir():
+                if not item.is_file():
+                    continue
+                if item.stem != self._TEMPLATE_IMAGE_STEM:
+                    continue
+                if item.suffix.lower() in self._ALLOWED_IMAGE_EXTS:
+                    return item.name
+        except Exception:
+            return None
+        return None
+
+    @staticmethod
+    def _sniff_image_ext(data: bytes) -> Optional[str]:
+        if not data or len(data) < 12:
+            return None
+        if data.startswith(b"\x89PNG\r\n\x1a\n"):
+            return ".png"
+        if data.startswith(b"\xff\xd8\xff"):
+            return ".jpg"
+        if data.startswith(b"BM"):
+            return ".bmp"
+        if data.startswith(b"II*\x00") or data.startswith(b"MM\x00*"):
+            return ".tiff"
+        if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+            return ".webp"
+        return None
+
+    def _prepare_template_image(self, image_file) -> Optional[Tuple[bytes, str]]:
+        """Validate and return (bytes, ext) for a template image upload."""
+        if not getattr(image_file, "filename", None):
+            return None
+
+        raw = image_file.read()
+        if not raw:
+            return None
+        if len(raw) > self._MAX_TEMPLATE_IMAGE_BYTES:
+            raise ValueError("Template image too large (max 15MB)")
+
+        ext = Path(str(image_file.filename)).suffix.lower()
+        sniffed = self._sniff_image_ext(raw)
+        if ext not in self._ALLOWED_IMAGE_EXTS:
+            ext = sniffed or ext
+        if ext == ".jpeg":
+            ext = ".jpg"
+        if ext == ".tiff":
+            ext = ".tif"
+        if ext not in self._ALLOWED_IMAGE_EXTS:
+            raise ValueError("Unsupported template image format")
+        if sniffed and sniffed not in {ext, ".jpg"} and not (sniffed == ".tiff" and ext in {".tif"}):
+            ext = sniffed
+
+        return raw, ext
+
+    def _write_template_image(self, template_folder: Path, raw: bytes, ext: str) -> None:
+        """Write the template image as samples/<template_id>/template_image.<ext>."""
+        template_folder = Path(template_folder)
+        template_folder.mkdir(parents=True, exist_ok=True)
+
+        # Remove previous template_image.* variants (best effort).
+        try:
+            for item in template_folder.iterdir():
+                if item.is_file() and item.stem == self._TEMPLATE_IMAGE_STEM:
+                    try:
+                        item.unlink()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        out_path = template_folder / f"{self._TEMPLATE_IMAGE_STEM}{ext}"
+        with open(out_path, "wb") as f:
+            f.write(raw)
     
     def _get_template_path(self, template_id: str) -> Optional[Path]:
         """Get template file path from ID"""

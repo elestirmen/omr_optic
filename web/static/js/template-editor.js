@@ -17,6 +17,8 @@ let templateData = {
 
 let fieldBlocks = [];
 let currentImage = null;
+let selectedImageFile = null;
+let editingTemplateId = null;
 let zoomLevel = 0.5;
 
 // Auto-gap (spacing) behavior
@@ -154,7 +156,7 @@ function getCurrentFormNumBubbles() {
 
 // ==================== INITIALIZATION ====================
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     canvas = document.getElementById('template-canvas');
     ctx = canvas.getContext('2d');
 
@@ -183,7 +185,136 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!key) return;
         removeCustomLabel(decodeURIComponent(key));
     });
+
+    await initFromUrl();
 });
+
+function getUrlParams() {
+    try {
+        return new URLSearchParams(window.location.search || '');
+    } catch (e) {
+        return new URLSearchParams('');
+    }
+}
+
+function normalizeTemplateData(data) {
+    const normalized = { ...(data || {}) };
+    if (!Array.isArray(normalized.preProcessors)) normalized.preProcessors = [];
+    if (!normalized.customLabels || typeof normalized.customLabels !== 'object') normalized.customLabels = {};
+    if (!Array.isArray(normalized.outputColumns)) normalized.outputColumns = [];
+    if (!normalized.fieldBlocks || typeof normalized.fieldBlocks !== 'object') normalized.fieldBlocks = {};
+    if (!Array.isArray(normalized.pageDimensions) || normalized.pageDimensions.length !== 2) {
+        normalized.pageDimensions = [1700, 2400];
+    }
+    if (!Array.isArray(normalized.bubbleDimensions) || normalized.bubbleDimensions.length !== 2) {
+        normalized.bubbleDimensions = [25, 25];
+    }
+    return normalized;
+}
+
+function rebuildFieldBlocksFromTemplateData() {
+    const blocks = [];
+    const src = templateData.fieldBlocks || {};
+    Object.entries(src).forEach(([name, block]) => {
+        const isCustom = !block || !block.fieldType;
+        blocks.push({
+            name,
+            fieldType: isCustom ? 'CUSTOM' : block.fieldType,
+            bubbleValues: isCustom ? (block?.bubbleValues || []) : undefined,
+            fieldLabels: block?.fieldLabels || [],
+            origin: block?.origin || [0, 0],
+            bubblesGap: typeof block?.bubblesGap === 'number' ? block.bubblesGap : 40,
+            labelsGap: typeof block?.labelsGap === 'number' ? block.labelsGap : 40,
+            direction: block?.direction || 'horizontal',
+        });
+    });
+    fieldBlocks = blocks;
+}
+
+function zoomToFitCanvas() {
+    const container = document.getElementById('canvas-container');
+    if (!container) return;
+    const maxWidth = container.clientWidth - 40;
+    const maxHeight = container.clientHeight - 40;
+    zoomLevel = Math.min(maxWidth / canvas.width, maxHeight / canvas.height, 1);
+    zoomLevel = Math.max(0.1, Math.min(1, zoomLevel));
+    applyZoom();
+}
+
+function loadImageFromUrl(url) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('Görsel yüklenemedi'));
+        const cacheBust = url.includes('?') ? '&' : '?';
+        img.src = `${url}${cacheBust}v=${Date.now()}`;
+    });
+}
+
+async function initFromUrl() {
+    const params = getUrlParams();
+    const templateId = params.get('template');
+    if (!templateId) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/templates/${encodeURIComponent(templateId)}`);
+        const data = await response.json();
+        if (!response.ok || data.error) {
+            throw new Error(data.error || `HTTP ${response.status}`);
+        }
+
+        editingTemplateId = data.id || templateId;
+        const nameEl = document.getElementById('template-name');
+        if (nameEl) {
+            nameEl.value = editingTemplateId;
+            nameEl.disabled = true;
+            nameEl.title = 'Var olan şablonlarda klasör adı (ID) değiştirilemez.';
+        }
+
+        const { id, path, imageAsset, imageUrl, ...rest } = data || {};
+        suppressDirty = true;
+        templateData = normalizeTemplateData(rest);
+
+        const dims = templateData.pageDimensions || [1700, 2400];
+        canvas.width = parseInt(dims[0]) || 1700;
+        canvas.height = parseInt(dims[1]) || 2400;
+        overlayCanvas.width = canvas.width;
+        overlayCanvas.height = canvas.height;
+        const pageWidthEl = document.getElementById('page-width');
+        const pageHeightEl = document.getElementById('page-height');
+        if (pageWidthEl) pageWidthEl.value = canvas.width;
+        if (pageHeightEl) pageHeightEl.value = canvas.height;
+
+        const bubbleSize = parseInt(templateData.bubbleDimensions?.[0]) || 25;
+        const bubbleSizeEl = document.getElementById('bubble-size');
+        if (bubbleSizeEl) bubbleSizeEl.value = bubbleSize;
+        syncTemplateBubbleDimensions();
+
+        rebuildFieldBlocksFromTemplateData();
+        updateBlocksList();
+        renderCustomLabels();
+        updateJsonPreview();
+
+        selectedImageFile = null;
+        if (imageUrl) {
+            try {
+                const img = await loadImageFromUrl(imageUrl);
+                currentImage = img;
+            } catch (e) {
+                currentImage = null;
+            }
+        }
+
+        zoomToFitCanvas();
+        drawImage();
+        showToast('Şablon yüklendi.');
+    } catch (error) {
+        console.error('Error loading template:', error);
+        showToast(`Şablon yüklenemedi: ${error.message}`);
+    } finally {
+        suppressDirty = false;
+    }
+}
 
 function setupEventListeners() {
     // Image upload
@@ -300,6 +431,7 @@ function setupEventListeners() {
 function handleImageUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
+    selectedImageFile = file;
 
     const reader = new FileReader();
     reader.onload = function (event) {
@@ -339,7 +471,7 @@ function drawImage() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (currentImage) {
-        ctx.drawImage(currentImage, 0, 0);
+        ctx.drawImage(currentImage, 0, 0, canvas.width, canvas.height);
     } else {
         drawGrid();
     }
@@ -1606,7 +1738,8 @@ function showToast(message) {
 // ==================== SAVE ====================
 
 async function saveTemplate() {
-    const name = document.getElementById('template-name').value.trim();
+    const nameEl = document.getElementById('template-name');
+    const name = nameEl?.value?.trim?.() || '';
 
     if (!name) {
         alert('Şablon adı gerekli!');
@@ -1619,11 +1752,20 @@ async function saveTemplate() {
     }
 
     try {
-        const response = await fetch(`${API_BASE}/api/templates`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, ...templateData })
-        });
+        const isEdit = !!editingTemplateId;
+        const url = isEdit
+            ? `${API_BASE}/api/templates/${encodeURIComponent(editingTemplateId)}`
+            : `${API_BASE}/api/templates`;
+        const method = isEdit ? 'PUT' : 'POST';
+
+        const payload = isEdit ? { ...templateData } : { name, ...templateData };
+        const form = new FormData();
+        form.append('template', JSON.stringify(payload));
+        if (selectedImageFile) {
+            form.append('image', selectedImageFile, selectedImageFile.name);
+        }
+
+        const response = await fetch(url, { method, body: form });
 
         const result = await response.json();
 

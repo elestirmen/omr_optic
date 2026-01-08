@@ -1,0 +1,28 @@
+{
+  "pageDimensions": [
+    2481,
+    3506
+  ],
+  "bubbleDimensions": [
+    25,
+    25
+  ],
+  "fieldBlocks": {
+    "Soyadi_Adi": {
+      "fieldType": "QTYPE_TR_ALPHABET",
+      "fieldLabels": [
+        "ad1..12"
+      ],
+      "origin": [
+        141,
+        237
+      ],
+      "bubblesGap": 51.29,
+      "labelsGap": 51.74,
+      "direction": "vertical"
+    }
+  },
+  "preProcessors": [],
+  "customLabels": {},
+  "outputColumns": []
+}
