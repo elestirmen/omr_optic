@@ -20,6 +20,7 @@ const scanStatus = document.getElementById('scan-status');
 const scanProgress = document.getElementById('scan-progress');
 const pagesCount = document.getElementById('pages-count');
 const scanResults = document.getElementById('scan-results');
+const scanWarnings = document.getElementById('scan-warnings');
 const scannedPages = document.getElementById('scanned-pages');
 const pageThumbnails = document.getElementById('page-thumbnails');
 
@@ -27,6 +28,120 @@ const pageThumbnails = document.getElementById('page-thumbnails');
 const platformInfo = document.getElementById('platform-info');
 const protocolInfo = document.getElementById('protocol-info');
 const adfInfo = document.getElementById('adf-info');
+const adfHint = document.getElementById('adf-hint');
+
+const scanWarningMessages = new Set();
+
+function renderScanWarnings() {
+    if (!scanWarnings) return;
+
+    scanWarnings.innerHTML = '';
+    const warnings = Array.from(scanWarningMessages);
+
+    if (warnings.length === 0) {
+        scanWarnings.style.display = 'none';
+        return;
+    }
+
+    scanWarnings.style.display = 'block';
+    warnings.forEach(message => {
+        const el = document.createElement('div');
+        el.className = 'scan-warning';
+        el.textContent = message;
+        scanWarnings.appendChild(el);
+    });
+}
+
+function clearScanWarnings() {
+    scanWarningMessages.clear();
+    renderScanWarnings();
+}
+
+function addScanWarning(message) {
+    if (!message) return;
+    const normalized = String(message).trim();
+    if (!normalized) return;
+    if (scanWarningMessages.has(normalized)) return;
+    scanWarningMessages.add(normalized);
+    renderScanWarnings();
+}
+
+function normalizeDeviceId(rawDeviceId) {
+    if (rawDeviceId === null || rawDeviceId === undefined) return null;
+    const str = String(rawDeviceId).trim();
+    if (!str) return null;
+    return /^\d+$/.test(str) ? parseInt(str, 10) : str;
+}
+
+function parseTriState(value) {
+    if (value === true || value === 'true' || value === 1 || value === '1') return true;
+    if (value === false || value === 'false' || value === 0 || value === '0') return false;
+    if (value === null || value === undefined || value === '' || value === 'null') return null;
+    return null;
+}
+
+function setAdfUiState(adfCapable, note = null) {
+    if (adfInfo) {
+        adfInfo.textContent = adfCapable === true ? 'Evet' : adfCapable === false ? 'Hayır' : 'Bilinmiyor';
+    }
+
+    if (useAdfCheckbox) {
+        if (adfCapable === false) {
+            useAdfCheckbox.checked = false;
+            useAdfCheckbox.disabled = true;
+        } else {
+            useAdfCheckbox.disabled = false;
+        }
+    }
+
+    if (adfHint) {
+        if (adfCapable === false) {
+            adfHint.textContent = note || 'Bu tarayıcıda ADF tespit edilemedi.';
+            adfHint.style.color = 'var(--accent-danger)';
+        } else if (adfCapable === true) {
+            adfHint.textContent = 'Birden fazla sayfa için etkinleştirin';
+            adfHint.style.color = '';
+        } else {
+            adfHint.textContent = note || 'ADF desteği doğrulanamadı; deneme gerekebilir.';
+            adfHint.style.color = '';
+        }
+    }
+}
+
+async function refreshSelectedDeviceCapabilities(selectedValue) {
+    const deviceId = normalizeDeviceId(selectedValue);
+    if (deviceId === null) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/scanner/capabilities`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ device_id: deviceId })
+        });
+        const data = await response.json();
+
+        // Ignore if user changed selection while request was in-flight.
+        if (selectedDevice !== selectedValue) return;
+
+        if (data.error) {
+            setAdfUiState(null, 'ADF tespiti yapılamadı');
+            return;
+        }
+
+        const adfCapable = parseTriState(data.adf_capable);
+
+        const option = deviceSelect?.selectedOptions?.[0];
+        if (option) {
+            option.dataset.adf = adfCapable === null ? 'null' : String(adfCapable);
+        }
+
+        setAdfUiState(adfCapable);
+    } catch (error) {
+        console.error('Error loading scanner capabilities:', error);
+        if (selectedDevice !== selectedValue) return;
+        setAdfUiState(null, 'ADF tespiti yapılamadı');
+    }
+}
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
@@ -107,10 +222,17 @@ function setupEventListeners() {
         selectedDevice = e.target.value;
         const selectedOption = e.target.selectedOptions[0];
 
-        if (selectedOption && selectedOption.dataset.adf) {
-            adfInfo.textContent = selectedOption.dataset.adf === 'true' ? 'Evet' : 'Hayır';
-        } else {
+        if (!selectedDevice) {
             adfInfo.textContent = '-';
+            if (useAdfCheckbox) useAdfCheckbox.disabled = false;
+            if (adfHint) {
+                adfHint.textContent = 'Birden fazla sayfa için etkinleştirin';
+                adfHint.style.color = '';
+            }
+        } else {
+            const cachedAdf = parseTriState(selectedOption?.dataset?.adf);
+            setAdfUiState(cachedAdf);
+            refreshSelectedDeviceCapabilities(selectedDevice);
         }
 
         scanBtn.disabled = !selectedDevice;
@@ -141,6 +263,10 @@ function setupWebSocket() {
                 showScanError(data.error);
             });
 
+            socket.on('scan_warning', (data) => {
+                addScanWarning(data?.warning);
+            });
+
             socket.on('processing_started', (data) => {
                 updateStatus('OMR işleme başladı...');
             });
@@ -157,13 +283,13 @@ async function startScan() {
         return;
     }
 
-    const deviceId = /^\d+$/.test(String(selectedDevice))
-        ? parseInt(String(selectedDevice), 10)
-        : selectedDevice;
+    const deviceId = normalizeDeviceId(selectedDevice);
 
     isScanning = true;
     scanBtn.style.display = 'none';
     cancelBtn.style.display = 'block';
+
+    clearScanWarnings();
 
     // Reset UI
     scanStatus.style.display = 'none';
@@ -228,6 +354,10 @@ async function pollScanStatus() {
     try {
         const response = await fetch(`${API_BASE}/api/scanner/status`);
         const data = await response.json();
+
+        if (Array.isArray(data.warnings)) {
+            data.warnings.forEach(w => addScanWarning(w));
+        }
 
         if (data.cancelled) {
             isScanning = false;
@@ -356,6 +486,7 @@ function showScanError(message) {
 
 // Reset scan UI
 function resetScanUI() {
+    clearScanWarnings();
     scanStatus.style.display = 'block';
     scanStatus.innerHTML = `
         <div class="status-idle">

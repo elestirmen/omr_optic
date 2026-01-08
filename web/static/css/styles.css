@@ -743,6 +743,22 @@ a:hover {
     color: var(--text-secondary);
 }
 
+/* Scan Warnings */
+.scan-warnings {
+    padding: 0 var(--spacing-xl);
+    margin-top: var(--spacing-md);
+}
+
+.scan-warning {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    color: var(--accent-danger);
+    border-radius: var(--border-radius-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    font-size: 0.875rem;
+    margin-bottom: var(--spacing-sm);
+}
+
 /* Scan Status */
 .scan-status {
     text-align: center;

@@ -338,6 +338,18 @@ def list_scanner_devices():
         return jsonify({'error': str(e), 'devices': []})
 
 
+@app.route('/api/scanner/capabilities', methods=['POST'])
+def scanner_capabilities():
+    """Best-effort device capability detection (e.g., ADF)."""
+    data = request.get_json() or {}
+    device_id = data.get('device_id')
+
+    try:
+        return jsonify(scanner_service.get_capabilities(device_id))
+    except Exception as e:
+        return jsonify({'error': str(e), 'device_id': device_id}), 500
+
+
 @app.route('/api/scanner/scan', methods=['POST'])
 def start_scan():
     """Start scanning with optional ADF support"""

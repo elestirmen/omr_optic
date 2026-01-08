@@ -32,6 +32,7 @@ class ScannerService:
         self.socketio = socketio
         self.omr_service = omr_service
         self.current_scan = None
+        self.device_capabilities: Dict[Union[str, int], Dict[str, Any]] = {}
         self.status = {
             'scanning': False,
             'device': None,
@@ -40,6 +41,7 @@ class ScannerService:
             'error': None,
             'session_id': None,
             'cancelled': False,
+            'warnings': [],
         }
         
         # Initialize platform-specific scanner
@@ -168,11 +170,12 @@ class ScannerService:
                 with self._twain_source_manager() as sm:
                     sources = sm.GetSourceList()
                 for i, name in enumerate(sources):
+                    cached = self.device_capabilities.get(i, {})
                     devices.append({
                         'id': i,
                         'name': name,
                         'type': 'TWAIN',
-                        'adf_capable': True  # Assume ADF support, will check when selected
+                        'adf_capable': cached.get('adf_capable')
                     })
             except Exception as e:
                 print(f"Error listing TWAIN devices: {e}")
@@ -182,11 +185,15 @@ class ScannerService:
                 import sane
                 sane_devices = sane.get_devices()
                 for i, dev in enumerate(sane_devices):
+                    cached = self.device_capabilities.get(dev[0], {})
                     devices.append({
                         'id': dev[0],
                         'name': f"{dev[1]} {dev[2]}",
                         'type': 'SANE',
-                        'adf_capable': 'adf' in dev[0].lower() or 'feeder' in str(dev).lower()
+                        'adf_capable': cached.get(
+                            'adf_capable',
+                            'adf' in dev[0].lower() or 'feeder' in str(dev).lower(),
+                        )
                     })
             except Exception as e:
                 print(f"Error listing SANE devices: {e}")
@@ -201,6 +208,197 @@ class ScannerService:
             })
         
         return devices
+
+    def get_capabilities(self, device_id: Optional[Union[str, int]] = None) -> Dict[str, Any]:
+        """Best-effort capability detection for a device (e.g., ADF support)."""
+        normalized_id = self._normalize_device_id(device_id)
+        scanner_type = self.scanner or 'none'
+
+        if normalized_id is None:
+            return {
+                'device_id': None,
+                'scanner_type': scanner_type,
+                'adf_capable': None,
+                'error': 'device_id required',
+            }
+
+        if normalized_id == 'simulator':
+            caps = {
+                'device_id': normalized_id,
+                'scanner_type': 'simulator',
+                'adf_capable': True,
+                'detected_at': datetime.now().isoformat(),
+            }
+            self.device_capabilities[normalized_id] = caps
+            return caps
+
+        if self.scanner is None:
+            return {
+                'device_id': normalized_id,
+                'scanner_type': 'none',
+                'adf_capable': None,
+                'detected_at': datetime.now().isoformat(),
+                'error': 'Scanner backend not available',
+            }
+
+        if self.scanner == 'twain':
+            caps = self._get_twain_capabilities(normalized_id)
+        elif self.scanner == 'sane':
+            caps = self._get_sane_capabilities(normalized_id)
+        else:
+            caps = {
+                'device_id': normalized_id,
+                'scanner_type': scanner_type,
+                'adf_capable': None,
+                'detected_at': datetime.now().isoformat(),
+            }
+
+        # Cache for UI/device list.
+        try:
+            self.device_capabilities[normalized_id] = caps
+        except Exception:
+            pass
+        return caps
+
+    @staticmethod
+    def _twain_bool_capability_allows_true(capability: Any) -> Optional[bool]:
+        """
+        Interpret pytwain capability data for a boolean capability.
+
+        Examples (pytwain):
+        - (6, (0, 0, [0])) -> supported but only False allowed => no ADF
+        - (6, (0, 0, [0, 1])) -> True/False allowed => ADF-capable
+        """
+        try:
+            _type, data = capability
+        except Exception:
+            return None
+
+        values = None
+        if isinstance(data, tuple) and len(data) == 3:
+            values = data[2]
+        else:
+            values = data
+
+        if isinstance(values, (list, tuple, set)):
+            return any(bool(v) for v in values)
+        if isinstance(values, bool):
+            return values
+        if isinstance(values, int):
+            return bool(values)
+        return None
+
+    @staticmethod
+    def _safe_close_twain(obj: Any) -> None:
+        for method_name in ('close', 'destroy'):
+            try:
+                method = getattr(obj, method_name, None)
+                if callable(method):
+                    method()
+            except Exception:
+                pass
+
+    def _get_twain_capabilities(self, device_id: Union[str, int]) -> Dict[str, Any]:
+        import twain
+
+        detected_at = datetime.now().isoformat()
+        sm = None
+        source = None
+        source_name = None
+
+        try:
+            sm = twain.SourceManager(0)
+            sources = sm.GetSourceList() or []
+            if not sources:
+                return {
+                    'device_id': device_id,
+                    'scanner_type': 'twain',
+                    'adf_capable': None,
+                    'detected_at': detected_at,
+                    'error': 'No TWAIN sources found',
+                }
+
+            source_idx = device_id if isinstance(device_id, int) else None
+            if source_idx is None and isinstance(device_id, str) and device_id.isdigit():
+                source_idx = int(device_id)
+
+            if source_idx is not None:
+                if source_idx < 0 or source_idx >= len(sources):
+                    return {
+                        'device_id': device_id,
+                        'scanner_type': 'twain',
+                        'adf_capable': None,
+                        'detected_at': detected_at,
+                        'error': f'Invalid scanner device index: {source_idx}',
+                    }
+                source_name = sources[source_idx]
+            elif isinstance(device_id, str) and device_id and device_id != 'simulator':
+                source_name = device_id
+            else:
+                source_name = sources[0]
+
+            source = sm.OpenSource(source_name)
+            if not source:
+                return {
+                    'device_id': device_id,
+                    'scanner_type': 'twain',
+                    'adf_capable': None,
+                    'detected_at': detected_at,
+                    'source_name': source_name,
+                    'error': 'Could not open TWAIN source',
+                }
+
+            adf_capable: Optional[bool] = None
+            try:
+                feeder_cap = source.GetCapability(twain.CAP_FEEDERENABLED)
+                adf_capable = self._twain_bool_capability_allows_true(feeder_cap)
+            except Exception:
+                adf_capable = None
+
+            return {
+                'device_id': device_id,
+                'scanner_type': 'twain',
+                'adf_capable': adf_capable,
+                'detected_at': detected_at,
+                'source_name': source_name,
+                'detected_by': 'twain.CAP_FEEDERENABLED',
+            }
+        except Exception as e:
+            return {
+                'device_id': device_id,
+                'scanner_type': 'twain',
+                'adf_capable': None,
+                'detected_at': detected_at,
+                'source_name': source_name,
+                'error': str(e),
+            }
+        finally:
+            if source is not None:
+                self._safe_close_twain(source)
+            if sm is not None:
+                self._safe_close_twain(sm)
+
+    def _get_sane_capabilities(self, device_id: Union[str, int]) -> Dict[str, Any]:
+        detected_at = datetime.now().isoformat()
+
+        try:
+            devices = self.list_devices()
+            match = next((d for d in devices if d.get('id') == device_id), None)
+            return {
+                'device_id': device_id,
+                'scanner_type': 'sane',
+                'adf_capable': match.get('adf_capable') if match else None,
+                'detected_at': detected_at,
+                'detected_by': 'sane.device_list',
+            }
+        except Exception as e:
+            return {
+                'device_id': device_id,
+                'scanner_type': 'sane',
+                'adf_capable': None,
+                'detected_at': detected_at,
+                'error': str(e),
+            }
     
     def scan(
         self,
@@ -227,6 +425,7 @@ class ScannerService:
             'pages_scanned': 0,
             'error': None,
             'cancelled': False,
+            'warnings': [],
             'session_id': session_id
         })
         
@@ -341,20 +540,26 @@ class ScannerService:
                 return sm.OpenSource()
 
             def configure_source(source):
+                adf_effective = bool(use_adf)
+
                 # Configure for ADF if available
                 if use_adf:
                     try:
                         source.SetCapability(twain.CAP_FEEDERENABLED, twain.TWTY_BOOL, True)
                         source.SetCapability(twain.CAP_AUTOFEED, twain.TWTY_BOOL, True)
                     except Exception:
-                        pass  # ADF not supported
+                        self._add_warning(
+                            "ADF etkinleştirilemedi. Bu cihaz ADF desteklemiyor olabilir; gerekirse tarayıcı arayüzünden (UI) ADF seçin."
+                        )
+                        if not show_ui:
+                            adf_effective = False
 
                 # For ADF, request all pages if supported (many drivers default to 1).
                 try:
                     source.SetCapability(
                         twain.CAP_XFERCOUNT,
                         twain.TWTY_INT16,
-                        -1 if use_adf else 1,
+                        -1 if adf_effective else 1,
                     )
                 except Exception:
                     pass
@@ -365,6 +570,8 @@ class ScannerService:
                     source.SetCapability(twain.ICAP_YRESOLUTION, twain.TWTY_FIX32, 300.0)
                 except Exception:
                     pass
+
+                return adf_effective
 
             modal = bool(show_ui)
 
@@ -391,17 +598,18 @@ class ScannerService:
                             {"page": page_num, "filename": current_filename},
                         )
 
-                    if not self.status.get("scanning", False) or not use_adf:
+                    if not self.status.get("scanning", False) or not adf_effective:
                         raise twain.exceptions.CancelAll
 
                 source = open_source()
                 try:
                     if not source:
                         raise Exception("Could not open scanner")
-                    configure_source(source)
+                    adf_effective = configure_source(source)
                     source.acquire_file(before=before, after=after, show_ui=show_ui, modal=modal)
                 finally:
                     try:
+                        source.close()
                         source.destroy()
                     except Exception:
                         pass
@@ -410,6 +618,7 @@ class ScannerService:
             def try_acquire_native() -> int:
                 """Fallback to native transfer."""
                 page_num = 0
+                adf_effective = bool(use_adf)
 
                 def after(image, more):
                     nonlocal page_num
@@ -429,17 +638,18 @@ class ScannerService:
                         {"page": page_num, "filename": filename},
                     )
 
-                    if not use_adf:
+                    if not adf_effective:
                         raise twain.exceptions.CancelAll
 
                 source = open_source()
                 try:
                     if not source:
                         raise Exception("Could not open scanner")
-                    configure_source(source)
+                    adf_effective = configure_source(source)
                     source.acquire_natively(after=after, show_ui=show_ui, modal=modal)
                 finally:
                     try:
+                        source.close()
                         source.destroy()
                     except Exception:
                         pass
@@ -472,11 +682,18 @@ class ScannerService:
             device = sane.open(device_id) if device_id else sane.open(sane.get_devices()[0][0])
             
             # Configure
+            adf_effective = bool(use_adf)
             try:
                 device.resolution = 300
                 if use_adf:
-                    device.source = 'ADF'
-            except:
+                    try:
+                        device.source = 'ADF'
+                    except Exception:
+                        adf_effective = False
+                        self._add_warning(
+                            "ADF etkinleştirilemedi. Bu cihaz/sürücü ADF'yi desteklemiyor olabilir; düz yatak taraması yapılacak."
+                        )
+            except Exception:
                 pass
             
             # Scan pages
@@ -500,7 +717,7 @@ class ScannerService:
                         'filename': filename
                     })
                     
-                    if not use_adf:
+                    if not adf_effective:
                         break
                         
                 except Exception:
@@ -540,6 +757,25 @@ class ScannerService:
         """Emit status via WebSocket"""
         if self.socketio:
             self.socketio.emit(event, data)
+
+    def _add_warning(self, message: str) -> None:
+        try:
+            warnings = self.status.get('warnings')
+            if not isinstance(warnings, list):
+                warnings = []
+                self.status['warnings'] = warnings
+            if message not in warnings:
+                warnings.append(message)
+        except Exception:
+            pass
+
+        self._emit_status(
+            'scan_warning',
+            {
+                'session_id': self.status.get('session_id'),
+                'warning': message,
+            },
+        )
 
     @staticmethod
     def _count_session_images(session_folder: Path) -> int:
