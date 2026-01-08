@@ -801,7 +801,7 @@ class ScannerService:
         """
         import re
 
-        pattern = re.compile(r"^scan_(\\d{4})\\.", re.IGNORECASE)
+        pattern = re.compile(r"^scan_(\d{4})\.", re.IGNORECASE)
         max_index = 0
 
         try:
