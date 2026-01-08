@@ -127,26 +127,17 @@ python -m venv venv
 # Aktifleştirildiğinde prompt'ta (venv) görünür
 ```
 
-#### 4. Temel Bağımlılıkları Yükleme
+#### 4. Bağımlılıkları Yükleme
 
 ```powershell
 # pip'i güncelle
 python -m pip install --upgrade pip
 
-# OpenCV yükle
-pip install opencv-python opencv-contrib-python
-
-# Proje bağımlılıklarını yükle
+# Tüm bağımlılıkları yükle (OpenCV, Flask, vb. dahil)
 pip install -r requirements.txt
 ```
 
-#### 5. Web Arayüzü Bağımlılıklarını Yükleme (Opsiyonel)
-
-```powershell
-pip install -r web/requirements.txt
-```
-
-#### 6. Kurulumu Test Etme
+#### 5. Kurulumu Test Etme
 
 ```powershell
 # Örnek veri ile test
@@ -201,19 +192,14 @@ source venv/bin/activate
 # pip'i güncelle
 pip install --upgrade pip
 
-# OpenCV yükle
-pip install opencv-python opencv-contrib-python
-
-# Proje bağımlılıklarını yükle
+# Tüm bağımlılıkları yükle (OpenCV, Flask, vb. dahil)
 pip install -r requirements.txt
 ```
 
-##### 5. Web Arayüzü Bağımlılıklarını Yükleme (Opsiyonel)
+##### 5. SANE Tarayıcı Desteği (Opsiyonel)
 
 ```bash
-pip install -r web/requirements.txt
-
-# SANE tarayıcı desteği için (opsiyonel)
+# SANE tarayıcı desteği için
 sudo apt install -y sane sane-utils libsane-dev
 pip install python-sane
 ```
@@ -282,7 +268,6 @@ source venv/bin/activate
 
 # Bağımlılıklar
 pip install --upgrade pip
-pip install opencv-python opencv-contrib-python
 pip install -r requirements.txt
 ```
 
@@ -732,7 +717,6 @@ OMRChecker/
 │
 ├── web/                    # Web arayüzü
 │   ├── app.py              # Flask sunucusu
-│   ├── requirements.txt    # Web bağımlılıkları
 │   ├── static/             # Statik dosyalar
 │   │   ├── css/            # Stiller
 │   │   │   └── styles.css  # Ana stil dosyası
