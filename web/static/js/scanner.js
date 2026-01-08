@@ -6,6 +6,8 @@ const API_BASE = '';
 let selectedDevice = null;
 let isScanning = false;
 let currentSessionId = null;
+let needsProcessing = false;
+let isProcessing = false;
 
 // DOM Elements
 const deviceSelect = document.getElementById('device-select');
@@ -221,10 +223,7 @@ function setupEventListeners() {
     cancelBtn.addEventListener('click', cancelScan);
     scanNextBtn?.addEventListener('click', () => startScan({ append: true }));
     finishScanBtn?.addEventListener('click', () => {
-        if (!currentSessionId) return;
-        const template = scanTemplateSelect?.value || '';
-        const templateParam = template ? `&template=${encodeURIComponent(template)}` : '';
-        window.location.href = `process.html?session=${encodeURIComponent(currentSessionId)}${templateParam}`;
+        processCurrentSession();
     });
 
     deviceSelect.addEventListener('change', (e) => {
@@ -278,10 +277,78 @@ function setupWebSocket() {
 
             socket.on('processing_started', (data) => {
                 updateStatus('OMR işleme başladı...');
+                isProcessing = true;
+                needsProcessing = true;
+                if (finishScanBtn) finishScanBtn.disabled = true;
+            });
+
+            socket.on('processing_complete', (data) => {
+                isProcessing = false;
+                needsProcessing = false;
+                if (finishScanBtn) finishScanBtn.disabled = false;
+
+                const downloadResultsBtn = document.getElementById('download-results-btn');
+                const downloadExcelBtn = document.getElementById('download-excel-btn');
+                if (downloadResultsBtn) downloadResultsBtn.disabled = false;
+                if (downloadExcelBtn) downloadExcelBtn.disabled = false;
+
+                const scanned = document.getElementById('total-scanned')?.textContent;
+                if (scanned) document.getElementById('total-processed').textContent = scanned;
+                addScanWarning('İşleme tamamlandı. CSV/Excel indirebilirsin.');
+            });
+
+            socket.on('processing_error', (data) => {
+                isProcessing = false;
+                needsProcessing = true;
+                if (finishScanBtn) finishScanBtn.disabled = false;
+                addScanWarning(data?.error || 'İşleme sırasında hata oluştu');
             });
         }
     } catch (error) {
         console.log('WebSocket not available, using polling');
+    }
+}
+
+async function processCurrentSession() {
+    if (!currentSessionId) return;
+    if (isProcessing) return;
+
+    isProcessing = true;
+    needsProcessing = true;
+    if (finishScanBtn) finishScanBtn.disabled = true;
+
+    try {
+        const response = await fetch(`${API_BASE}/api/process`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                session_id: currentSessionId,
+                template_id: scanTemplateSelect?.value || null
+            })
+        });
+
+        const data = await response.json();
+        if (!response.ok || data.error) {
+            throw new Error(data.error || 'İşleme başarısız');
+        }
+
+        isProcessing = false;
+        needsProcessing = false;
+        if (finishScanBtn) finishScanBtn.disabled = false;
+
+        const downloadResultsBtn = document.getElementById('download-results-btn');
+        const downloadExcelBtn = document.getElementById('download-excel-btn');
+        if (downloadResultsBtn) downloadResultsBtn.disabled = false;
+        if (downloadExcelBtn) downloadExcelBtn.disabled = false;
+
+        const scanned = document.getElementById('total-scanned')?.textContent;
+        if (scanned) document.getElementById('total-processed').textContent = scanned;
+        addScanWarning('İşleme tamamlandı. CSV/Excel indirebilirsin.');
+    } catch (error) {
+        isProcessing = false;
+        needsProcessing = true;
+        if (finishScanBtn) finishScanBtn.disabled = false;
+        addScanWarning(error.message || 'İşleme sırasında hata oluştu');
     }
 }
 
@@ -294,6 +361,7 @@ async function startScan(options = {}) {
 
     const deviceId = normalizeDeviceId(selectedDevice);
     const append = !!options.append && !!currentSessionId;
+    const requestedAutoProcess = !append && !!autoProcessCheckbox?.checked;
 
     isScanning = true;
     scanBtn.style.display = 'none';
@@ -302,6 +370,10 @@ async function startScan(options = {}) {
     if (finishScanBtn) finishScanBtn.style.display = 'none';
 
     clearScanWarnings();
+
+    // If we append more pages (flatbed) or auto-process is off, user must re-run processing to update CSV/Excel.
+    needsProcessing = append || !requestedAutoProcess;
+    isProcessing = requestedAutoProcess;
 
     // Reset UI
     scanStatus.style.display = 'none';
@@ -324,7 +396,7 @@ async function startScan(options = {}) {
                 session_id: append ? currentSessionId : null,
                 append,
                 use_adf: append ? false : useAdfCheckbox.checked,
-                auto_process: append ? false : autoProcessCheckbox.checked,
+                auto_process: append ? false : requestedAutoProcess,
                 show_ui: showUiCheckbox ? showUiCheckbox.checked : true,
                 template_id: scanTemplateSelect.value || null
             })
@@ -374,6 +446,15 @@ async function pollScanStatus() {
 
         if (Array.isArray(data.warnings)) {
             data.warnings.forEach(w => addScanWarning(w));
+        }
+
+        if (data.processing) {
+            isProcessing = true;
+            needsProcessing = true;
+            if (finishScanBtn) finishScanBtn.disabled = true;
+        } else if (isProcessing) {
+            isProcessing = false;
+            if (finishScanBtn) finishScanBtn.disabled = false;
         }
 
         if (data.cancelled) {
@@ -452,7 +533,7 @@ function completeScan(data) {
 
     // Show results
     document.getElementById('total-scanned').textContent = scannedCount;
-    document.getElementById('total-processed').textContent = autoProcessCheckbox?.checked ? scannedCount : '0';
+    document.getElementById('total-processed').textContent = needsProcessing || isProcessing ? '0' : scannedCount;
     scanResults.style.display = 'block';
 
     // Update links
@@ -465,11 +546,11 @@ function completeScan(data) {
         const templateParam = template ? `&template=${encodeURIComponent(template)}` : '';
         viewResultsBtn.href = `process.html?session=${encodeURIComponent(data.session_id)}${templateParam}`;
         downloadResultsBtn.onclick = () => {
-            window.open(`${API_BASE}/api/results/${data.session_id}/csv`, '_blank');
+            window.open(`${API_BASE}/api/results/${data.session_id}/csv?kind=all`, '_blank');
         };
         if (downloadExcelBtn) {
             downloadExcelBtn.onclick = () => {
-                window.open(`${API_BASE}/api/results/${data.session_id}/excel`, '_blank');
+                window.open(`${API_BASE}/api/results/${data.session_id}/excel?kind=all`, '_blank');
             };
         }
     }
@@ -478,12 +559,13 @@ function completeScan(data) {
     const canAppendFlatbed = !!currentSessionId && useAdfCheckbox && !useAdfCheckbox.checked;
     if (scanNextBtn) scanNextBtn.style.display = canAppendFlatbed ? 'block' : 'none';
     if (finishScanBtn) finishScanBtn.style.display = currentSessionId ? 'block' : 'none';
+    if (finishScanBtn) finishScanBtn.disabled = isProcessing;
 
-    // If not auto-processed yet, disable downloads (results may not exist).
-    const processed = autoProcessCheckbox?.checked;
-    if (!processed) {
+    // Disable downloads until processing is done (or re-done after append scans).
+    if (needsProcessing || isProcessing) {
         downloadResultsBtn.disabled = true;
         if (downloadExcelBtn) downloadExcelBtn.disabled = true;
+        addScanWarning('Yeni sayfalar eklendiyse CSV/Excel güncellemek için "İşlemeyi Başlat" butonuna bas.');
     } else {
         downloadResultsBtn.disabled = false;
         if (downloadExcelBtn) downloadExcelBtn.disabled = false;

@@ -35,6 +35,7 @@ class ScannerService:
         self.device_capabilities: Dict[Union[str, int], Dict[str, Any]] = {}
         self.status = {
             'scanning': False,
+            'processing': False,
             'device': None,
             'progress': 0,
             'pages_scanned': 0,
@@ -418,10 +419,11 @@ class ScannerService:
         device_id = self._normalize_device_id(device_id)
         session_folder = self.upload_folder / session_id
         session_folder.mkdir(parents=True, exist_ok=True)
-        existing_pages = self._count_session_images(session_folder) if append else 0
+        existing_pages = self._count_scanned_pages(session_folder) if append else 0
         
         self.status.update({
             'scanning': True,
+            'processing': False,
             'device': device_id,
             'progress': min(existing_pages * 10, 99) if existing_pages else 0,
             'pages_scanned': existing_pages,
@@ -458,7 +460,7 @@ class ScannerService:
 
             # If a driver saved images but callbacks didn't update pages_scanned,
             # reconcile by counting files on disk.
-            disk_pages = self._count_session_images(session_folder)
+            disk_pages = self._count_scanned_pages(session_folder)
             if disk_pages > self.status.get("pages_scanned", 0):
                 self.status["pages_scanned"] = disk_pages
 
@@ -491,6 +493,7 @@ class ScannerService:
                         'error': 'OMR service not configured'
                     })
                 else:
+                    self.status['processing'] = True
                     self._emit_status('processing_started', {'session_id': session_id})
                     try:
                         result = self.omr_service.process_session(session_id, template_id)
@@ -503,12 +506,15 @@ class ScannerService:
                             'session_id': session_id,
                             'error': str(e)
                         })
+                    finally:
+                        self.status['processing'] = False
                 
         except Exception as e:
             self.status['error'] = str(e)
             self._emit_status('scan_error', {'session_id': session_id, 'error': str(e)})
         finally:
             self.status['scanning'] = False
+            self.status['processing'] = False
 
     def _scan_twain(
         self,
@@ -579,25 +585,27 @@ class ScannerService:
 
             def try_acquire_file() -> int:
                 """Prefer file transfer when supported (more compatible with many drivers)."""
-                page_num = self._next_scan_index(session_folder) - 1
                 current_filename = None
+                start_count = self._count_scanned_pages(session_folder)
+                last_known_count = start_count
 
                 def before(_img_info):
-                    nonlocal current_filename, page_num
+                    nonlocal current_filename
                     if not self.status.get("scanning", False):
                         raise twain.exceptions.CancelAll
-                    current_filename = f"scan_{page_num + 1:04d}.png"
+                    current_filename = self._allocate_scan_filename(session_folder, "png")
                     return str(session_folder / current_filename)
 
                 def after(more):
-                    nonlocal page_num, current_filename
-                    page_num += 1
-                    self.status["pages_scanned"] = page_num
-                    self.status["progress"] = min(page_num * 10, 99)
+                    nonlocal current_filename, last_known_count
+                    # Trust disk count to avoid off-by-one / overwrite issues.
+                    last_known_count = self._count_scanned_pages(session_folder)
+                    self.status["pages_scanned"] = last_known_count
+                    self.status["progress"] = min(last_known_count * 10, 99)
                     if current_filename:
                         self._emit_status(
                             "page_scanned",
-                            {"page": page_num, "filename": current_filename},
+                            {"page": last_known_count, "filename": current_filename},
                         )
 
                     if not self.status.get("scanning", False) or not adf_effective:
@@ -615,29 +623,30 @@ class ScannerService:
                         source.destroy()
                     except Exception:
                         pass
-                return page_num
+                return max(0, last_known_count - start_count)
 
             def try_acquire_native() -> int:
                 """Fallback to native transfer."""
-                page_num = self._next_scan_index(session_folder) - 1
                 adf_effective = bool(use_adf)
+                start_count = self._count_scanned_pages(session_folder)
+                last_known_count = start_count
 
                 def after(image, more):
-                    nonlocal page_num
+                    nonlocal last_known_count
                     if not self.status.get("scanning", False):
                         raise twain.exceptions.CancelAll
 
-                    page_num += 1
-                    filename = f"scan_{page_num:04d}.bmp"
+                    filename = self._allocate_scan_filename(session_folder, "bmp")
                     filepath = session_folder / filename
                     image.save(str(filepath))
                     image.close()
 
-                    self.status["pages_scanned"] = page_num
-                    self.status["progress"] = min(page_num * 10, 99)
+                    last_known_count = self._count_scanned_pages(session_folder)
+                    self.status["pages_scanned"] = last_known_count
+                    self.status["progress"] = min(last_known_count * 10, 99)
                     self._emit_status(
                         "page_scanned",
-                        {"page": page_num, "filename": filename},
+                        {"page": last_known_count, "filename": filename},
                     )
 
                     if not adf_effective:
@@ -655,7 +664,7 @@ class ScannerService:
                         source.destroy()
                     except Exception:
                         pass
-                return page_num
+                return max(0, last_known_count - start_count)
 
             errors = []
             for attempt in (try_acquire_file, try_acquire_native):
@@ -699,23 +708,23 @@ class ScannerService:
                 pass
             
             # Scan pages
-            page_num = self._next_scan_index(session_folder) - 1
+            page_num = self._count_scanned_pages(session_folder)
             
             while True:
                 if not self.status.get('scanning', False):
                     break
                 try:
+                    filename = self._allocate_scan_filename(session_folder, "png")
                     page_num += 1
                     device.start()
                     image = device.snap()
                     
-                    filename = f"scan_{page_num:04d}.png"
                     filepath = session_folder / filename
                     image.save(str(filepath))
                     
-                    self.status['pages_scanned'] = page_num
+                    self.status['pages_scanned'] = self._count_scanned_pages(session_folder)
                     self._emit_status('page_scanned', {
-                        'page': page_num,
+                        'page': self.status['pages_scanned'],
                         'filename': filename
                     })
                     
@@ -735,10 +744,8 @@ class ScannerService:
         import time
         from PIL import Image
         
-        start_index = self._next_scan_index(session_folder)
-
         # Simulate 3 pages
-        for page_num in range(start_index, start_index + 3):
+        for _ in range(3):
             if not self.status.get('scanning', False):
                 break
             time.sleep(0.5)  # Simulate scan time
@@ -746,14 +753,14 @@ class ScannerService:
             # Create a simple test image
             img = Image.new('RGB', (1700, 2200), color='white')
             
-            filename = f"scan_{page_num:04d}.png"
+            filename = self._allocate_scan_filename(session_folder, "png")
             filepath = session_folder / filename
             img.save(str(filepath))
             
-            self.status['pages_scanned'] = page_num
-            self.status['progress'] = page_num * 33
+            self.status['pages_scanned'] = self._count_scanned_pages(session_folder)
+            self.status['progress'] = min(self.status['pages_scanned'] * 33, 99)
             self._emit_status('page_scanned', {
-                'page': page_num,
+                'page': self.status['pages_scanned'],
                 'filename': filename
             })
     
@@ -782,13 +789,20 @@ class ScannerService:
         )
 
     @staticmethod
-    def _count_session_images(session_folder: Path) -> int:
+    def _count_scanned_pages(session_folder: Path) -> int:
+        """Count scanned page images created by this service (scan_####.*)."""
+        import re
+
         exts = {".png", ".jpg", ".jpeg", ".bmp", ".tif", ".tiff"}
+        pattern = re.compile(r"^scan_\d{4}\.", re.IGNORECASE)
+
         try:
             return sum(
                 1
                 for p in Path(session_folder).iterdir()
-                if p.is_file() and p.suffix.lower() in exts
+                if p.is_file()
+                and p.suffix.lower() in exts
+                and pattern.match(p.name) is not None
             )
         except Exception:
             return 0
@@ -819,6 +833,27 @@ class ScannerService:
             return 1
 
         return max_index + 1
+
+    @classmethod
+    def _allocate_scan_filename(cls, session_folder: Path, ext: str) -> str:
+        """
+        Allocate a free scan filename like scan_0001.png, scan_0002.png, ...
+        Never overwrites existing files.
+        """
+        session_folder = Path(session_folder)
+        ext = (ext or "").lstrip(".") or "png"
+
+        index = cls._next_scan_index(session_folder)
+        for _ in range(10000):
+            filename = f"scan_{index:04d}.{ext}"
+            if not (session_folder / filename).exists():
+                return filename
+            index += 1
+
+        # Extremely defensive fallback.
+        import uuid
+
+        return f"scan_{uuid.uuid4().hex}.{ext}"
     
     def get_status(self) -> Dict[str, Any]:
         """Get current scanner status"""

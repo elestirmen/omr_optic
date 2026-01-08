@@ -148,13 +148,32 @@ class OMRService:
 
     def read_results_dataframe(self, session_id: str, kind: Optional[str] = None):
         """Read a session CSV into a pandas DataFrame (strings) with internal columns stripped."""
-        csv_path = (
-            self.get_csv_path_by_kind(session_id, kind)
-            if kind
-            else self.get_csv_path(session_id)
-        )
         import pandas as pd
 
+        kind = (kind or "").strip().lower()
+
+        if kind in {"all", "combined"}:
+            result_folder = self.results_folder / session_id
+            csv_map = self._find_csv_files(result_folder)
+            ordered = [("results", csv_map.get("results")), ("errors", csv_map.get("errors")), ("multimarked", csv_map.get("multimarked"))]
+
+            frames = []
+            for csv_kind, path in ordered:
+                if not path:
+                    continue
+                df_part = pd.read_csv(path, dtype=str, na_filter=False)
+                if len(df_part) == 0:
+                    continue
+                df_part.insert(0, "kind", csv_kind)
+                frames.append(df_part)
+
+            if not frames:
+                raise FileNotFoundError(f"No CSV results found for session {session_id}")
+
+            df = pd.concat(frames, ignore_index=True)
+            return self._strip_internal_columns(df)
+
+        csv_path = self.get_csv_path_by_kind(session_id, kind) if kind else self.get_csv_path(session_id)
         df = pd.read_csv(csv_path, dtype=str, na_filter=False)
         return self._strip_internal_columns(df)
     

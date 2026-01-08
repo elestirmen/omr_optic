@@ -401,13 +401,13 @@ function closeModal() {
 // Download CSV
 function downloadCSV() {
     if (sessionId) {
-        window.open(`${API_BASE}/api/results/${sessionId}/csv`, '_blank');
+        window.open(`${API_BASE}/api/results/${sessionId}/csv?kind=all`, '_blank');
     }
 }
 
 function downloadExcel() {
     if (sessionId) {
-        window.open(`${API_BASE}/api/results/${sessionId}/excel`, '_blank');
+        window.open(`${API_BASE}/api/results/${sessionId}/excel?kind=all`, '_blank');
     }
 }
 
