@@ -256,21 +256,26 @@ async function uploadFilesInChunks(files) {
 
 // Process files
 async function processFiles() {
-    if (uploadedFiles.length === 0) return;
+    if (uploadedFiles.length === 0 && !sessionId) return;
 
     processBtn.disabled = true;
     progressSection.style.display = 'block';
     progressFill.style.width = '0%';
     progressFill.style.background = '';
-    progressText.textContent = 'Dosyalar yükleniyor...';
+    progressText.textContent = uploadedFiles.length > 0 ? 'Dosyalar yükleniyor...' : 'Oturum işleniyor...';
 
     try {
-        const filesToUpload = [...uploadedFiles].sort((a, b) =>
-            getDisplayName(a).localeCompare(getDisplayName(b))
-        );
-        sessionId = await uploadFilesInChunks(filesToUpload);
-        progressFill.style.width = '50%';
-        progressText.textContent = 'OMR işleniyor...';
+        if (uploadedFiles.length > 0) {
+            const filesToUpload = [...uploadedFiles].sort((a, b) =>
+                getDisplayName(a).localeCompare(getDisplayName(b))
+            );
+            sessionId = await uploadFilesInChunks(filesToUpload);
+            progressFill.style.width = '50%';
+            progressText.textContent = 'OMR işleniyor...';
+        } else {
+            progressFill.style.width = '30%';
+            progressText.textContent = 'OMR işleniyor...';
+        }
 
         // Process OMR
         const processResponse = await fetch(`${API_BASE}/api/process`, {
@@ -305,6 +310,8 @@ async function processFiles() {
         progressText.textContent = 'Hata: ' + error.message;
         progressFill.style.width = '100%';
         progressFill.style.background = 'var(--accent-danger)';
+    } finally {
+        processBtn.disabled = uploadedFiles.length === 0 && !sessionId;
     }
 }
 
@@ -413,6 +420,7 @@ function checkUrlParams() {
     if (session) {
         sessionId = session;
         loadSessionResults(session);
+        processBtn.disabled = false;
     }
 
     if (template) {

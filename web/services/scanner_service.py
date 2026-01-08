@@ -408,6 +408,7 @@ class ScannerService:
         auto_process: bool = True,
         template_id: Optional[str] = None,
         show_ui: bool = True,
+        append: bool = False,
     ) -> Dict[str, Any]:
         """Start scanning operation"""
         
@@ -417,12 +418,13 @@ class ScannerService:
         device_id = self._normalize_device_id(device_id)
         session_folder = self.upload_folder / session_id
         session_folder.mkdir(parents=True, exist_ok=True)
+        existing_pages = self._count_session_images(session_folder) if append else 0
         
         self.status.update({
             'scanning': True,
             'device': device_id,
-            'progress': 0,
-            'pages_scanned': 0,
+            'progress': min(existing_pages * 10, 99) if existing_pages else 0,
+            'pages_scanned': existing_pages,
             'error': None,
             'cancelled': False,
             'warnings': [],
@@ -577,7 +579,7 @@ class ScannerService:
 
             def try_acquire_file() -> int:
                 """Prefer file transfer when supported (more compatible with many drivers)."""
-                page_num = 0
+                page_num = self._next_scan_index(session_folder) - 1
                 current_filename = None
 
                 def before(_img_info):
@@ -617,7 +619,7 @@ class ScannerService:
 
             def try_acquire_native() -> int:
                 """Fallback to native transfer."""
-                page_num = 0
+                page_num = self._next_scan_index(session_folder) - 1
                 adf_effective = bool(use_adf)
 
                 def after(image, more):
@@ -697,7 +699,7 @@ class ScannerService:
                 pass
             
             # Scan pages
-            page_num = 0
+            page_num = self._next_scan_index(session_folder) - 1
             
             while True:
                 if not self.status.get('scanning', False):
@@ -733,8 +735,10 @@ class ScannerService:
         import time
         from PIL import Image
         
+        start_index = self._next_scan_index(session_folder)
+
         # Simulate 3 pages
-        for page_num in range(1, 4):
+        for page_num in range(start_index, start_index + 3):
             if not self.status.get('scanning', False):
                 break
             time.sleep(0.5)  # Simulate scan time
@@ -788,6 +792,33 @@ class ScannerService:
             )
         except Exception:
             return 0
+
+    @staticmethod
+    def _next_scan_index(session_folder: Path) -> int:
+        """
+        Return the next 1-based scan index for filenames like scan_0001.png.
+        Uses the highest existing index to avoid overwriting on append scans.
+        """
+        import re
+
+        pattern = re.compile(r"^scan_(\\d{4})\\.", re.IGNORECASE)
+        max_index = 0
+
+        try:
+            for p in Path(session_folder).iterdir():
+                if not p.is_file():
+                    continue
+                match = pattern.match(p.name)
+                if not match:
+                    continue
+                try:
+                    max_index = max(max_index, int(match.group(1)))
+                except Exception:
+                    continue
+        except Exception:
+            return 1
+
+        return max_index + 1
     
     def get_status(self) -> Dict[str, Any]:
         """Get current scanner status"""

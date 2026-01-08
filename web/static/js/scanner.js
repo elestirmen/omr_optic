@@ -21,6 +21,8 @@ const scanProgress = document.getElementById('scan-progress');
 const pagesCount = document.getElementById('pages-count');
 const scanResults = document.getElementById('scan-results');
 const scanWarnings = document.getElementById('scan-warnings');
+const scanNextBtn = document.getElementById('scan-next-btn');
+const finishScanBtn = document.getElementById('finish-scan-btn');
 const scannedPages = document.getElementById('scanned-pages');
 const pageThumbnails = document.getElementById('page-thumbnails');
 
@@ -215,8 +217,15 @@ async function loadTemplates() {
 // Setup event listeners
 function setupEventListeners() {
     refreshDevicesBtn.addEventListener('click', loadDevices);
-    scanBtn.addEventListener('click', startScan);
+    scanBtn.addEventListener('click', () => startScan());
     cancelBtn.addEventListener('click', cancelScan);
+    scanNextBtn?.addEventListener('click', () => startScan({ append: true }));
+    finishScanBtn?.addEventListener('click', () => {
+        if (!currentSessionId) return;
+        const template = scanTemplateSelect?.value || '';
+        const templateParam = template ? `&template=${encodeURIComponent(template)}` : '';
+        window.location.href = `process.html?session=${encodeURIComponent(currentSessionId)}${templateParam}`;
+    });
 
     deviceSelect.addEventListener('change', (e) => {
         selectedDevice = e.target.value;
@@ -277,17 +286,20 @@ function setupWebSocket() {
 }
 
 // Start scanning
-async function startScan() {
+async function startScan(options = {}) {
     if (!selectedDevice) {
         alert('Lütfen bir tarayıcı seçin');
         return;
     }
 
     const deviceId = normalizeDeviceId(selectedDevice);
+    const append = !!options.append && !!currentSessionId;
 
     isScanning = true;
     scanBtn.style.display = 'none';
     cancelBtn.style.display = 'block';
+    if (scanNextBtn) scanNextBtn.style.display = 'none';
+    if (finishScanBtn) finishScanBtn.style.display = 'none';
 
     clearScanWarnings();
 
@@ -296,9 +308,12 @@ async function startScan() {
     scanProgress.style.display = 'block';
     scanResults.style.display = 'none';
     scannedPages.style.display = 'block';
-    pageThumbnails.innerHTML = '';
-    pagesCount.textContent = '0';
-    updateProgressRing(0);
+    if (!append) {
+        currentSessionId = null;
+        pageThumbnails.innerHTML = '';
+        pagesCount.textContent = '0';
+        updateProgressRing(0);
+    }
 
     try {
         const response = await fetch(`${API_BASE}/api/scanner/scan`, {
@@ -306,8 +321,10 @@ async function startScan() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 device_id: deviceId,
-                use_adf: useAdfCheckbox.checked,
-                auto_process: autoProcessCheckbox.checked,
+                session_id: append ? currentSessionId : null,
+                append,
+                use_adf: append ? false : useAdfCheckbox.checked,
+                auto_process: append ? false : autoProcessCheckbox.checked,
                 show_ui: showUiCheckbox ? showUiCheckbox.checked : true,
                 template_id: scanTemplateSelect.value || null
             })
@@ -435,7 +452,7 @@ function completeScan(data) {
 
     // Show results
     document.getElementById('total-scanned').textContent = scannedCount;
-    document.getElementById('total-processed').textContent = scannedCount;
+    document.getElementById('total-processed').textContent = autoProcessCheckbox?.checked ? scannedCount : '0';
     scanResults.style.display = 'block';
 
     // Update links
@@ -444,7 +461,9 @@ function completeScan(data) {
     const downloadExcelBtn = document.getElementById('download-excel-btn');
 
     if (data.session_id) {
-        viewResultsBtn.href = `process.html?session=${data.session_id}`;
+        const template = scanTemplateSelect?.value || '';
+        const templateParam = template ? `&template=${encodeURIComponent(template)}` : '';
+        viewResultsBtn.href = `process.html?session=${encodeURIComponent(data.session_id)}${templateParam}`;
         downloadResultsBtn.onclick = () => {
             window.open(`${API_BASE}/api/results/${data.session_id}/csv`, '_blank');
         };
@@ -453,6 +472,21 @@ function completeScan(data) {
                 window.open(`${API_BASE}/api/results/${data.session_id}/excel`, '_blank');
             };
         }
+    }
+
+    // Flatbed multi-scan (append): allow scanning more pages into the same session.
+    const canAppendFlatbed = !!currentSessionId && useAdfCheckbox && !useAdfCheckbox.checked;
+    if (scanNextBtn) scanNextBtn.style.display = canAppendFlatbed ? 'block' : 'none';
+    if (finishScanBtn) finishScanBtn.style.display = currentSessionId ? 'block' : 'none';
+
+    // If not auto-processed yet, disable downloads (results may not exist).
+    const processed = autoProcessCheckbox?.checked;
+    if (!processed) {
+        downloadResultsBtn.disabled = true;
+        if (downloadExcelBtn) downloadExcelBtn.disabled = true;
+    } else {
+        downloadResultsBtn.disabled = false;
+        if (downloadExcelBtn) downloadExcelBtn.disabled = false;
     }
 
     // Save to recent sessions
@@ -487,6 +521,8 @@ function showScanError(message) {
 // Reset scan UI
 function resetScanUI() {
     clearScanWarnings();
+    if (scanNextBtn) scanNextBtn.style.display = 'none';
+    if (finishScanBtn) finishScanBtn.style.display = 'none';
     scanStatus.style.display = 'block';
     scanStatus.innerHTML = `
         <div class="status-idle">

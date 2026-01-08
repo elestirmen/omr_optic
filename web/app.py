@@ -359,9 +359,14 @@ def start_scan():
     auto_process = data.get('auto_process', True)
     template_id = data.get('template_id')
     show_ui = data.get('show_ui', True)
+    provided_session_id = data.get('session_id')
+    append = bool(data.get('append', False))
     
     try:
-        session_id = str(uuid.uuid4())
+        if provided_session_id:
+            session_id = str(uuid.UUID(str(provided_session_id)))
+        else:
+            session_id = str(uuid.uuid4())
         result = scanner_service.scan(
             session_id=session_id,
             device_id=device_id,
@@ -369,6 +374,7 @@ def start_scan():
             auto_process=auto_process,
             template_id=template_id,
             show_ui=show_ui,
+            append=append,
         )
         return jsonify(result)
     except Exception as e:
