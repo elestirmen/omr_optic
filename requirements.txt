@@ -52,3 +52,6 @@ pytwain>=2.1.0; platform_system=="Windows"
 
 # Linux SANE scanner support (optional, uncomment if needed)
 # python-sane>=2.9.1; platform_system=="Linux"
+
+# Network scanner discovery via mDNS/Zeroconf (eSCL/AirScan protocol)
+zeroconf>=0.131.0

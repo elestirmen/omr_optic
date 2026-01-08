@@ -4,6 +4,7 @@ Scanner Service - Cross-platform scanner integration
 Supports:
 - Windows: TWAIN protocol
 - Linux: SANE protocol
+- Network: eSCL/AirScan via Zeroconf discovery
 
 Provides ADF (Automatic Document Feeder) support for bulk scanning.
 """
@@ -13,26 +14,366 @@ import sys
 import uuid
 import platform
 import ctypes
+import time
+import random
+import socket
+import logging
 from ctypes import wintypes
 from contextlib import contextmanager
 from pathlib import Path
-from datetime import datetime
-from typing import Optional, Dict, Any, List, Union
-from threading import Thread
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Any, List, Union, Callable, TypeVar
+from threading import Thread, Lock
+from functools import wraps
 
 # Detect platform
 PLATFORM = platform.system()
 
+# Setup logging
+logger = logging.getLogger(__name__)
+
+# Type variable for generic retry decorator
+T = TypeVar('T')
+
+
+class ScannerError(Exception):
+    """Base exception for scanner errors with user-friendly messages"""
+    
+    def __init__(self, message: str, user_hint: str = None, recoverable: bool = True):
+        super().__init__(message)
+        self.user_hint = user_hint or message
+        self.recoverable = recoverable
+
+
+class ScannerTimeoutError(ScannerError):
+    """Timeout while communicating with scanner"""
+    pass
+
+
+class ScannerConnectionError(ScannerError):
+    """Failed to connect to scanner"""
+    pass
+
+
+class DeviceCache:
+    """Thread-safe cache for discovered devices with TTL"""
+    
+    def __init__(self, ttl_seconds: int = 60):
+        self._cache: Dict[str, Any] = {}
+        self._timestamps: Dict[str, datetime] = {}
+        self._lock = Lock()
+        self._ttl = timedelta(seconds=ttl_seconds)
+    
+    def get(self, key: str) -> Optional[Any]:
+        with self._lock:
+            if key not in self._cache:
+                return None
+            if datetime.now() - self._timestamps[key] > self._ttl:
+                del self._cache[key]
+                del self._timestamps[key]
+                return None
+            return self._cache[key]
+    
+    def set(self, key: str, value: Any) -> None:
+        with self._lock:
+            self._cache[key] = value
+            self._timestamps[key] = datetime.now()
+    
+    def invalidate(self, key: str = None) -> None:
+        with self._lock:
+            if key:
+                self._cache.pop(key, None)
+                self._timestamps.pop(key, None)
+            else:
+                self._cache.clear()
+                self._timestamps.clear()
+
+
+def retry_with_backoff(
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+    max_delay: float = 30.0,
+    exponential_base: float = 2.0,
+    jitter: bool = True,
+    retryable_exceptions: tuple = (Exception,),
+    on_retry: Callable[[Exception, int], None] = None,
+):
+    """
+    Decorator for retrying functions with exponential backoff.
+    
+    Args:
+        max_retries: Maximum number of retry attempts
+        base_delay: Initial delay between retries in seconds
+        max_delay: Maximum delay between retries
+        exponential_base: Base for exponential backoff calculation
+        jitter: Add random jitter to prevent thundering herd
+        retryable_exceptions: Tuple of exception types to retry on
+        on_retry: Optional callback(exception, attempt) called before each retry
+    """
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @wraps(func)
+        def wrapper(*args, **kwargs) -> T:
+            last_exception = None
+            
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except retryable_exceptions as e:
+                    last_exception = e
+                    
+                    if attempt == max_retries:
+                        logger.warning(
+                            f"{func.__name__} failed after {max_retries + 1} attempts: {e}"
+                        )
+                        raise
+                    
+                    # Calculate delay with exponential backoff
+                    delay = min(base_delay * (exponential_base ** attempt), max_delay)
+                    
+                    # Add jitter (±25% of delay)
+                    if jitter:
+                        delay = delay * (0.75 + random.random() * 0.5)
+                    
+                    if on_retry:
+                        on_retry(e, attempt + 1)
+                    
+                    logger.info(
+                        f"{func.__name__} attempt {attempt + 1} failed: {e}. "
+                        f"Retrying in {delay:.2f}s..."
+                    )
+                    time.sleep(delay)
+            
+            raise last_exception
+        return wrapper
+    return decorator
+
+
+class NetworkScannerDiscovery:
+    """Discover network scanners via Zeroconf/mDNS (eSCL/AirScan protocol)"""
+    
+    # Service types for scanner discovery
+    SERVICE_TYPES = [
+        "_uscan._tcp.local.",      # USB scan over network (eSCL)
+        "_ipp-usb._tcp.local.",    # IPP USB
+        "_scanner._tcp.local.",    # Generic scanner service
+        "_pdl-datastream._tcp.local.",  # Some network scanners
+    ]
+    
+    def __init__(self, timeout: float = 5.0):
+        self.timeout = timeout
+        self._discovered_devices: List[Dict[str, Any]] = []
+        self._lock = Lock()
+        self._zeroconf = None
+        self._browsers = []
+    
+    def _get_zeroconf(self):
+        """Lazy initialization of zeroconf"""
+        try:
+            from zeroconf import Zeroconf
+            if self._zeroconf is None:
+                self._zeroconf = Zeroconf()
+            return self._zeroconf
+        except ImportError:
+            logger.debug("zeroconf package not installed, network discovery disabled")
+            return None
+    
+    def discover(self) -> List[Dict[str, Any]]:
+        """
+        Discover network scanners using mDNS/Zeroconf.
+        Returns list of discovered devices.
+        """
+        try:
+            from zeroconf import ServiceBrowser, ServiceListener
+        except ImportError:
+            logger.info(
+                "zeroconf paketi yüklü değil. Ağ tarayıcı keşfi devre dışı. "
+                "Yüklemek için: pip install zeroconf"
+            )
+            return []
+        
+        zc = self._get_zeroconf()
+        if not zc:
+            return []
+        
+        self._discovered_devices = []
+        
+        class ScannerListener(ServiceListener):
+            def __init__(inner_self):
+                inner_self.parent = self
+            
+            def add_service(inner_self, zeroconf, service_type, name):
+                try:
+                    info = zeroconf.get_service_info(service_type, name, timeout=3000)
+                    if info:
+                        device = inner_self.parent._parse_service_info(info, service_type, name)
+                        if device:
+                            with inner_self.parent._lock:
+                                # Avoid duplicates by checking address
+                                existing_addrs = {d.get('address') for d in inner_self.parent._discovered_devices}
+                                if device.get('address') not in existing_addrs:
+                                    inner_self.parent._discovered_devices.append(device)
+                                    logger.info(f"Discovered network scanner: {device.get('name')}")
+                except Exception as e:
+                    logger.debug(f"Error getting service info for {name}: {e}")
+            
+            def update_service(inner_self, zeroconf, service_type, name):
+                pass
+            
+            def remove_service(inner_self, zeroconf, service_type, name):
+                pass
+        
+        listener = ScannerListener()
+        
+        # Start browsing for all service types
+        self._browsers = []
+        for service_type in self.SERVICE_TYPES:
+            try:
+                browser = ServiceBrowser(zc, service_type, listener)
+                self._browsers.append(browser)
+            except Exception as e:
+                logger.debug(f"Failed to browse {service_type}: {e}")
+        
+        # Wait for discovery
+        time.sleep(self.timeout)
+        
+        # Cleanup browsers
+        for browser in self._browsers:
+            try:
+                browser.cancel()
+            except Exception:
+                pass
+        self._browsers = []
+        
+        return self._discovered_devices.copy()
+    
+    def _parse_service_info(self, info, service_type: str, name: str) -> Optional[Dict[str, Any]]:
+        """Parse Zeroconf service info into device dict"""
+        try:
+            addresses = info.parsed_addresses()
+            if not addresses:
+                return None
+            
+            address = addresses[0]
+            port = info.port
+            
+            # Extract properties
+            props = {}
+            if info.properties:
+                for k, v in info.properties.items():
+                    try:
+                        key = k.decode() if isinstance(k, bytes) else k
+                        val = v.decode() if isinstance(v, bytes) else v
+                        props[key] = val
+                    except Exception:
+                        pass
+            
+            # Determine scanner name
+            scanner_name = props.get('ty') or props.get('product') or name.split('.')[0]
+            
+            # Check for ADF capability from properties
+            adf_capable = None
+            if 'adf' in props.get('pdl', '').lower():
+                adf_capable = True
+            elif props.get('duplex'):
+                adf_capable = True
+            
+            return {
+                'id': f"network://{address}:{port}",
+                'name': f"{scanner_name} (Ağ: {address})",
+                'type': 'eSCL/Network',
+                'address': address,
+                'port': port,
+                'adf_capable': adf_capable,
+                'properties': props,
+                'service_type': service_type,
+            }
+        except Exception as e:
+            logger.debug(f"Failed to parse service info: {e}")
+            return None
+    
+    def close(self):
+        """Cleanup zeroconf resources"""
+        for browser in self._browsers:
+            try:
+                browser.cancel()
+            except Exception:
+                pass
+        self._browsers = []
+        
+        if self._zeroconf:
+            try:
+                self._zeroconf.close()
+            except Exception:
+                pass
+            self._zeroconf = None
+
 
 class ScannerService:
-    """Cross-platform scanner service with ADF support"""
+    """Cross-platform scanner service with ADF support and robust error handling"""
     
-    def __init__(self, upload_folder: Path, socketio=None, omr_service=None):
+    # Configuration defaults
+    DEFAULT_CONFIG = {
+        'twain_init_timeout': 10.0,       # Seconds to wait for TWAIN init
+        'twain_scan_timeout': 120.0,      # Seconds to wait for scan completion
+        'network_discovery_timeout': 5.0,  # Seconds to wait for network discovery
+        'device_cache_ttl': 60,            # Seconds to cache device list
+        'max_retries': 3,                  # Maximum retry attempts
+        'retry_base_delay': 1.0,           # Base delay for exponential backoff
+    }
+    
+    # User-friendly error messages (Turkish)
+    ERROR_MESSAGES = {
+        'twain_not_installed': (
+            "TWAIN sürücüsü yüklü değil. "
+            "Çözüm: pip install pytwain komutunu çalıştırın."
+        ),
+        'twain_init_failed': (
+            "TWAIN başlatılamadı. "
+            "Çözüm: Tarayıcı sürücülerinin yüklü olduğundan emin olun."
+        ),
+        'no_devices_found': (
+            "Hiç tarayıcı bulunamadı. "
+            "Çözüm: 1) Tarayıcının açık ve bağlı olduğunu kontrol edin. "
+            "2) Tarayıcı sürücülerinin yüklü olduğundan emin olun. "
+            "3) Ağ tarayıcısı için aynı ağda olduğunuzdan emin olun."
+        ),
+        'device_busy': (
+            "Tarayıcı meşgul veya başka bir uygulama tarafından kullanılıyor. "
+            "Çözüm: Diğer tarama uygulamalarını kapatın ve tekrar deneyin."
+        ),
+        'network_timeout': (
+            "Ağ tarayıcısına bağlanılamadı (zaman aşımı). "
+            "Çözüm: 1) Tarayıcının açık olduğunu kontrol edin. "
+            "2) Ağ bağlantınızı kontrol edin. "
+            "3) Tarayıcı uyku modundaysa uyandırın."
+        ),
+        'scan_cancelled': (
+            "Tarama iptal edildi."
+        ),
+        'adf_empty': (
+            "ADF'de kağıt bulunamadı. "
+            "Çözüm: Kağıtları ADF'ye yerleştirin ve tekrar deneyin."
+        ),
+    }
+    
+    def __init__(self, upload_folder: Path, socketio=None, omr_service=None, config: Dict = None):
         self.upload_folder = Path(upload_folder)
         self.socketio = socketio
         self.omr_service = omr_service
         self.current_scan = None
         self.device_capabilities: Dict[Union[str, int], Dict[str, Any]] = {}
+        
+        # Merge config with defaults
+        self.config = {**self.DEFAULT_CONFIG, **(config or {})}
+        
+        # Initialize device cache
+        self._device_cache = DeviceCache(ttl_seconds=self.config['device_cache_ttl'])
+        
+        # Network scanner discovery
+        self._network_discovery = NetworkScannerDiscovery(
+            timeout=self.config['network_discovery_timeout']
+        )
+        
         self.status = {
             'scanning': False,
             'processing': False,
@@ -43,11 +384,12 @@ class ScannerService:
             'session_id': None,
             'cancelled': False,
             'warnings': [],
+            'last_error_hint': None,  # User-friendly error hint
         }
         
         # Initialize platform-specific scanner
         self.scanner = None
-        self._init_scanner()
+        self._init_scanner_with_retry()
 
     @staticmethod
     def _normalize_device_id(device_id: Optional[Union[str, int]]) -> Optional[Union[str, int]]:
@@ -136,70 +478,117 @@ class ScannerService:
         except Exception:
             pass
 
-    def _init_scanner(self):
-        """Initialize platform-specific scanner support"""
+    def _init_scanner_with_retry(self):
+        """Initialize platform-specific scanner support with retry logic"""
+        
+        def on_retry(exc, attempt):
+            logger.info(f"Scanner init retry {attempt}: {exc}")
+        
         if PLATFORM == 'Windows':
+            self._init_twain_with_retry(on_retry)
+        elif PLATFORM == 'Linux':
+            self._init_sane_with_retry(on_retry)
+        
+        # Log initialization result
+        if self.scanner:
+            logger.info(f"Scanner backend initialized: {self.scanner}")
+        else:
+            logger.warning("No scanner backend available")
+    
+    def _init_twain_with_retry(self, on_retry: Callable = None):
+        """Initialize TWAIN with retry logic"""
+        max_retries = self.config['max_retries']
+        base_delay = self.config['retry_base_delay']
+        
+        for attempt in range(max_retries + 1):
             try:
                 import twain
                 # Validate DSM availability (TWAIN often has thread/window-handle constraints).
                 sm = twain.SourceManager(0)
                 sm.destroy()
                 self.scanner = 'twain'
+                return  # Success
+                
             except ImportError:
-                print("Warning: pytwain not installed. Scanner support disabled.")
-                print("Install with: pip install pytwain")
+                logger.warning(self.ERROR_MESSAGES['twain_not_installed'])
+                self.status['last_error_hint'] = self.ERROR_MESSAGES['twain_not_installed']
+                return  # Don't retry import errors
+                
             except Exception as e:
-                print(f"Warning: Could not initialize TWAIN: {e}")
+                if attempt == max_retries:
+                    logger.warning(f"TWAIN init failed after {max_retries + 1} attempts: {e}")
+                    self.status['last_error_hint'] = self.ERROR_MESSAGES['twain_init_failed']
+                    return
+                
+                # Calculate delay with exponential backoff and jitter
+                delay = base_delay * (2 ** attempt) * (0.75 + random.random() * 0.5)
+                
+                if on_retry:
+                    on_retry(e, attempt + 1)
+                
+                logger.info(f"TWAIN init attempt {attempt + 1} failed: {e}. Retrying in {delay:.2f}s...")
+                time.sleep(delay)
+    
+    def _init_sane_with_retry(self, on_retry: Callable = None):
+        """Initialize SANE with retry logic"""
+        max_retries = self.config['max_retries']
+        base_delay = self.config['retry_base_delay']
         
-        elif PLATFORM == 'Linux':
+        for attempt in range(max_retries + 1):
             try:
                 import sane
                 sane.init()
                 self.scanner = 'sane'
+                return  # Success
+                
             except ImportError:
-                print("Warning: python-sane not installed. Scanner support disabled.")
-                print("Install with: pip install python-sane")
+                logger.warning("python-sane not installed. Install with: pip install python-sane")
+                return  # Don't retry import errors
+                
             except Exception as e:
-                print(f"Warning: Could not initialize SANE: {e}")
+                if attempt == max_retries:
+                    logger.warning(f"SANE init failed after {max_retries + 1} attempts: {e}")
+                    return
+                
+                delay = base_delay * (2 ** attempt) * (0.75 + random.random() * 0.5)
+                
+                if on_retry:
+                    on_retry(e, attempt + 1)
+                
+                logger.info(f"SANE init attempt {attempt + 1} failed: {e}. Retrying in {delay:.2f}s...")
+                time.sleep(delay)
     
-    def list_devices(self) -> List[Dict[str, Any]]:
-        """List available scanner devices"""
+    def list_devices(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
+        """
+        List available scanner devices with caching and retry logic.
+        
+        Args:
+            force_refresh: If True, bypass cache and rescan
+        
+        Returns:
+            List of device dictionaries
+        """
+        # Check cache first
+        if not force_refresh:
+            cached = self._device_cache.get('device_list')
+            if cached is not None:
+                logger.debug("Returning cached device list")
+                return cached
+        
         devices = []
+        errors = []
         
-        if self.scanner == 'twain':
-            try:
-                with self._twain_source_manager() as sm:
-                    sources = sm.GetSourceList()
-                for i, name in enumerate(sources):
-                    cached = self.device_capabilities.get(i, {})
-                    devices.append({
-                        'id': i,
-                        'name': name,
-                        'type': 'TWAIN',
-                        'adf_capable': cached.get('adf_capable')
-                    })
-            except Exception as e:
-                print(f"Error listing TWAIN devices: {e}")
+        # 1. Discover local devices (TWAIN/SANE)
+        local_devices, local_error = self._list_local_devices_with_retry()
+        devices.extend(local_devices)
+        if local_error:
+            errors.append(local_error)
         
-        elif self.scanner == 'sane':
-            try:
-                import sane
-                sane_devices = sane.get_devices()
-                for i, dev in enumerate(sane_devices):
-                    cached = self.device_capabilities.get(dev[0], {})
-                    devices.append({
-                        'id': dev[0],
-                        'name': f"{dev[1]} {dev[2]}",
-                        'type': 'SANE',
-                        'adf_capable': cached.get(
-                            'adf_capable',
-                            'adf' in dev[0].lower() or 'feeder' in str(dev).lower(),
-                        )
-                    })
-            except Exception as e:
-                print(f"Error listing SANE devices: {e}")
+        # 2. Discover network devices (Zeroconf/mDNS)
+        network_devices = self._discover_network_devices()
+        devices.extend(network_devices)
         
-        # Add a simulated device for testing if no real devices
+        # 3. Add simulator if no devices found
         if not devices:
             devices.append({
                 'id': 'simulator',
@@ -207,8 +596,110 @@ class ScannerService:
                 'type': 'Simulator',
                 'adf_capable': True
             })
+            
+            # Set helpful error hint
+            if errors:
+                self.status['last_error_hint'] = "; ".join(errors)
+            else:
+                self.status['last_error_hint'] = self.ERROR_MESSAGES['no_devices_found']
+        else:
+            self.status['last_error_hint'] = None
+        
+        # Cache the result
+        self._device_cache.set('device_list', devices)
+        
+        logger.info(f"Found {len(devices)} scanner(s): {[d.get('name') for d in devices]}")
+        return devices
+    
+    def _list_local_devices_with_retry(self) -> tuple:
+        """
+        List local TWAIN/SANE devices with retry logic.
+        Returns (devices_list, error_message)
+        """
+        max_retries = self.config['max_retries']
+        base_delay = self.config['retry_base_delay']
+        devices = []
+        last_error = None
+        
+        for attempt in range(max_retries + 1):
+            try:
+                if self.scanner == 'twain':
+                    devices = self._list_twain_devices()
+                elif self.scanner == 'sane':
+                    devices = self._list_sane_devices()
+                
+                return devices, None  # Success
+                
+            except Exception as e:
+                last_error = str(e)
+                
+                if attempt == max_retries:
+                    error_msg = f"Yerel tarayıcılar listelenemedi: {last_error}"
+                    logger.warning(error_msg)
+                    return [], error_msg
+                
+                # Calculate delay with exponential backoff and jitter
+                delay = base_delay * (2 ** attempt) * (0.75 + random.random() * 0.5)
+                logger.info(
+                    f"Device list attempt {attempt + 1} failed: {e}. "
+                    f"Retrying in {delay:.2f}s..."
+                )
+                time.sleep(delay)
+        
+        return [], last_error
+    
+    def _list_twain_devices(self) -> List[Dict[str, Any]]:
+        """List TWAIN devices (internal, no retry)"""
+        devices = []
+        
+        with self._twain_source_manager() as sm:
+            sources = sm.GetSourceList() or []
+            
+        for i, name in enumerate(sources):
+            cached = self.device_capabilities.get(i, {})
+            devices.append({
+                'id': i,
+                'name': name,
+                'type': 'TWAIN',
+                'adf_capable': cached.get('adf_capable')
+            })
         
         return devices
+    
+    def _list_sane_devices(self) -> List[Dict[str, Any]]:
+        """List SANE devices (internal, no retry)"""
+        import sane
+        devices = []
+        
+        sane_devices = sane.get_devices()
+        for i, dev in enumerate(sane_devices):
+            cached = self.device_capabilities.get(dev[0], {})
+            devices.append({
+                'id': dev[0],
+                'name': f"{dev[1]} {dev[2]}",
+                'type': 'SANE',
+                'adf_capable': cached.get(
+                    'adf_capable',
+                    'adf' in dev[0].lower() or 'feeder' in str(dev).lower(),
+                )
+            })
+        
+        return devices
+    
+    def _discover_network_devices(self) -> List[Dict[str, Any]]:
+        """Discover network scanners via Zeroconf/mDNS"""
+        try:
+            network_devices = self._network_discovery.discover()
+            logger.info(f"Discovered {len(network_devices)} network scanner(s)")
+            return network_devices
+        except Exception as e:
+            logger.debug(f"Network scanner discovery failed: {e}")
+            return []
+    
+    def refresh_devices(self) -> List[Dict[str, Any]]:
+        """Force refresh device list, bypassing cache"""
+        self._device_cache.invalidate('device_list')
+        return self.list_devices(force_refresh=True)
 
     def get_capabilities(self, device_id: Optional[Union[str, int]] = None) -> Dict[str, Any]:
         """Best-effort capability detection for a device (e.g., ADF support)."""
@@ -856,12 +1347,30 @@ class ScannerService:
         return f"scan_{uuid.uuid4().hex}.{ext}"
     
     def get_status(self) -> Dict[str, Any]:
-        """Get current scanner status"""
+        """Get current scanner status with diagnostic information"""
         return {
             **self.status,
             'platform': PLATFORM,
-            'scanner_type': self.scanner or 'none'
+            'scanner_type': self.scanner or 'none',
+            'config': {
+                'max_retries': self.config['max_retries'],
+                'device_cache_ttl': self.config['device_cache_ttl'],
+                'network_discovery_timeout': self.config['network_discovery_timeout'],
+            },
+            'diagnostics': {
+                'twain_available': self.scanner == 'twain',
+                'sane_available': self.scanner == 'sane',
+                'zeroconf_available': self._is_zeroconf_available(),
+            }
         }
+    
+    def _is_zeroconf_available(self) -> bool:
+        """Check if zeroconf is available for network discovery"""
+        try:
+            import zeroconf
+            return True
+        except ImportError:
+            return False
     
     def cancel_scan(self):
         """Cancel current scan operation"""

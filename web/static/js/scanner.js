@@ -155,39 +155,138 @@ document.addEventListener('DOMContentLoaded', () => {
     setupWebSocket();
 });
 
-// Load scanner devices
-async function loadDevices() {
+// Load scanner devices (uses cache)
+async function loadDevices(forceRefresh = false) {
     deviceSelect.innerHTML = '<option value="">-- Cihazlar aranıyor... --</option>';
+    
+    // Show loading state on refresh button
+    if (refreshDevicesBtn) {
+        refreshDevicesBtn.disabled = true;
+        refreshDevicesBtn.textContent = '🔄 Aranıyor...';
+    }
 
     try {
-        const response = await fetch(`${API_BASE}/api/scanner/devices`);
+        // Use refresh endpoint if forced, otherwise regular devices endpoint
+        const endpoint = forceRefresh 
+            ? `${API_BASE}/api/scanner/refresh`
+            : `${API_BASE}/api/scanner/devices`;
+        
+        const response = await fetch(endpoint, {
+            method: forceRefresh ? 'POST' : 'GET',
+            headers: forceRefresh ? { 'Content-Type': 'application/json' } : {},
+        });
         const data = await response.json();
 
         deviceSelect.innerHTML = '<option value="">-- Tarayıcı Seçin --</option>';
 
         if (data.devices && data.devices.length > 0) {
-            data.devices.forEach(device => {
+            // Separate real devices from simulator
+            const realDevices = data.devices.filter(d => d.id !== 'simulator');
+            const hasSimulator = data.devices.some(d => d.id === 'simulator');
+            
+            realDevices.forEach(device => {
                 const option = document.createElement('option');
                 option.value = device.id;
-                option.textContent = `${device.name} (${device.type})`;
+                
+                // Show device type indicator
+                let typeIcon = '📠';
+                if (device.type === 'eSCL/Network') typeIcon = '🌐';
+                else if (device.type === 'TWAIN') typeIcon = '🖨️';
+                else if (device.type === 'SANE') typeIcon = '🐧';
+                
+                option.textContent = `${typeIcon} ${device.name}`;
                 option.dataset.adf = device.adf_capable;
+                option.dataset.type = device.type;
                 deviceSelect.appendChild(option);
             });
+            
+            // Add simulator at the end if present
+            if (hasSimulator && realDevices.length === 0) {
+                const simDevice = data.devices.find(d => d.id === 'simulator');
+                const option = document.createElement('option');
+                option.value = simDevice.id;
+                option.textContent = `🧪 ${simDevice.name}`;
+                option.dataset.adf = simDevice.adf_capable;
+                option.dataset.type = 'Simulator';
+                deviceSelect.appendChild(option);
+            }
+            
+            // Show hint if only simulator found
+            if (realDevices.length === 0 && data.last_error_hint) {
+                showDeviceHint(data.last_error_hint, 'warning');
+            } else {
+                hideDeviceHint();
+            }
         } else {
             deviceSelect.innerHTML = '<option value="">-- Tarayıcı bulunamadı --</option>';
+            if (data.last_error_hint) {
+                showDeviceHint(data.last_error_hint, 'error');
+            }
         }
 
         // Update platform info
-        const statusResponse = await fetch(`${API_BASE}/api/scanner/status`);
-        const statusData = await statusResponse.json();
-
-        platformInfo.textContent = statusData.platform || 'Bilinmiyor';
-        protocolInfo.textContent = statusData.scanner_type === 'twain' ? 'TWAIN' :
-            statusData.scanner_type === 'sane' ? 'SANE' : 'Simülatör';
+        await updatePlatformInfo();
 
     } catch (error) {
         console.error('Error loading devices:', error);
         deviceSelect.innerHTML = '<option value="">-- Bağlantı hatası --</option>';
+        showDeviceHint('Sunucuya bağlanılamadı. Uygulamanın çalıştığından emin olun.', 'error');
+    } finally {
+        // Reset refresh button
+        if (refreshDevicesBtn) {
+            refreshDevicesBtn.disabled = false;
+            refreshDevicesBtn.textContent = '🔄 Yenile';
+        }
+    }
+}
+
+// Update platform and diagnostics info
+async function updatePlatformInfo() {
+    try {
+        const statusResponse = await fetch(`${API_BASE}/api/scanner/diagnostics`);
+        const statusData = await statusResponse.json();
+
+        if (platformInfo) {
+            platformInfo.textContent = statusData.platform || 'Bilinmiyor';
+        }
+        
+        if (protocolInfo) {
+            let protocol = 'Bilinmiyor';
+            if (statusData.scanner_type === 'twain') protocol = 'TWAIN';
+            else if (statusData.scanner_type === 'sane') protocol = 'SANE';
+            else if (statusData.scanner_type === 'none') protocol = 'Yok';
+            
+            // Show network discovery status
+            if (statusData.diagnostics?.zeroconf_available) {
+                protocol += ' + Ağ';
+            }
+            protocolInfo.textContent = protocol;
+        }
+    } catch (error) {
+        console.error('Error loading platform info:', error);
+    }
+}
+
+// Show device discovery hint/error
+function showDeviceHint(message, type = 'info') {
+    let hintEl = document.getElementById('device-discovery-hint');
+    if (!hintEl) {
+        hintEl = document.createElement('div');
+        hintEl.id = 'device-discovery-hint';
+        hintEl.className = 'device-hint';
+        deviceSelect.parentNode.insertBefore(hintEl, deviceSelect.nextSibling);
+    }
+    
+    hintEl.textContent = message;
+    hintEl.className = `device-hint device-hint-${type}`;
+    hintEl.style.display = 'block';
+}
+
+// Hide device discovery hint
+function hideDeviceHint() {
+    const hintEl = document.getElementById('device-discovery-hint');
+    if (hintEl) {
+        hintEl.style.display = 'none';
     }
 }
 
@@ -218,7 +317,7 @@ async function loadTemplates() {
 
 // Setup event listeners
 function setupEventListeners() {
-    refreshDevicesBtn.addEventListener('click', loadDevices);
+    refreshDevicesBtn.addEventListener('click', () => loadDevices(true)); // Force refresh
     scanBtn.addEventListener('click', () => startScan());
     cancelBtn.addEventListener('click', cancelScan);
     scanNextBtn?.addEventListener('click', () => startScan({ append: true }));

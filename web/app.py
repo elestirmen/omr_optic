@@ -330,12 +330,49 @@ def update_template(template_id):
 
 @app.route('/api/scanner/devices', methods=['GET'])
 def list_scanner_devices():
-    """List available scanner devices"""
+    """List available scanner devices (uses cache if available)"""
     try:
         devices = scanner_service.list_devices()
-        return jsonify({'devices': devices})
+        status = scanner_service.get_status()
+        return jsonify({
+            'devices': devices,
+            'last_error_hint': status.get('last_error_hint'),
+        })
     except Exception as e:
         return jsonify({'error': str(e), 'devices': []})
+
+
+@app.route('/api/scanner/refresh', methods=['POST'])
+def refresh_scanner_devices():
+    """Force refresh scanner device list (bypasses cache, retries discovery)"""
+    try:
+        devices = scanner_service.refresh_devices()
+        status = scanner_service.get_status()
+        return jsonify({
+            'devices': devices,
+            'last_error_hint': status.get('last_error_hint'),
+            'refreshed': True,
+        })
+    except Exception as e:
+        return jsonify({'error': str(e), 'devices': [], 'refreshed': False})
+
+
+@app.route('/api/scanner/diagnostics', methods=['GET'])
+def scanner_diagnostics():
+    """Get detailed scanner diagnostics for troubleshooting"""
+    try:
+        status = scanner_service.get_status()
+        return jsonify({
+            'platform': status.get('platform'),
+            'scanner_type': status.get('scanner_type'),
+            'config': status.get('config'),
+            'diagnostics': status.get('diagnostics'),
+            'last_error_hint': status.get('last_error_hint'),
+            'scanning': status.get('scanning'),
+            'processing': status.get('processing'),
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/scanner/capabilities', methods=['POST'])
