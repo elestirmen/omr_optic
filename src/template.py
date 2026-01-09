@@ -6,6 +6,8 @@
  Github: https://github.com/Udayraj123
 
 """
+import re
+
 from src.constants.common import FIELD_TYPES
 from src.core import ImageInstanceOps
 from src.logger import logger
@@ -60,6 +62,43 @@ class Template:
             self.fill_output_columns(non_custom_columns, all_custom_columns)
 
         self.validate_template_columns(non_custom_columns, all_custom_columns)
+        
+        # Gruplandırılmış output_columns oluştur (ad1, ad2, ad3 -> ad)
+        self.grouped_output_columns = self._create_grouped_output_columns()
+
+    def _create_grouped_output_columns(self):
+        """
+        output_columns listesini gruplandırır.
+        ad1, ad2, ad3 gibi numaralı sütunları "ad" olarak tek sütuna dönüştürür.
+        Sorular (q1, q2, ...) birleştirilmez, ayrı kalır.
+        Sırayı korur - ilk görülen prefix'in pozisyonunu kullanır.
+        """
+        # Birleştirilecek prefix'ler (ad, tc, ogrenci, tel, alan gibi)
+        MERGE_PREFIXES = {"ad", "tc", "ogrenci", "tel", "alan"}
+        
+        grouped_columns = []
+        seen_prefixes = set()
+        
+        for col in self.output_columns:
+            # Sayısal son eki ayır (örn: "ad12" -> ("ad", "12"))
+            match = re.match(r'^([a-zA-Z_]+)(\d+)$', col)
+            if match:
+                prefix = match.group(1)
+                # Sadece belirlenen prefix'leri birleştir
+                if prefix in MERGE_PREFIXES:
+                    if prefix not in seen_prefixes:
+                        seen_prefixes.add(prefix)
+                        grouped_columns.append(prefix)
+                else:
+                    # Sorular (q1, q2, ...) gibi alanları ayrı bırak
+                    grouped_columns.append(col)
+            else:
+                # Numaralı değilse direkt ekle (eğer daha önce eklenmemişse)
+                if col not in seen_prefixes:
+                    seen_prefixes.add(col)
+                    grouped_columns.append(col)
+        
+        return grouped_columns
 
     def parse_output_columns(self, output_columns_array):
         self.output_columns = parse_fields(f"Output Columns", output_columns_array)

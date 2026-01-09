@@ -45,6 +45,87 @@ def get_concatenated_response(omr_response, template):
     return concatenated_response
 
 
+def get_concatenated_response_grouped(omr_response, template):
+    """
+    omr_response'u gruplandırarak döndürür.
+    ad1, ad2, ad3 gibi numaralı alanları "ad" olarak tek sütunda birleştirir.
+    Test soruları (q1, q2, ...) birleştirilmez, ayrı kalır.
+    """
+    concatenated_response = {}
+    
+    # Birleştirilecek prefix'ler (ad, tc, ogrenci, tel, alan gibi)
+    # "q" ile başlayanlar (sorular) birleştirilmez
+    MERGE_PREFIXES = {"ad", "tc", "ogrenci", "tel", "alan"}
+    
+    # Önce custom_labels'ı işle
+    for field_label, concatenate_keys in template.custom_labels.items():
+        custom_label = "".join([omr_response[k] for k in concatenate_keys])
+        concatenated_response[field_label] = custom_label
+    
+    # non_custom_labels için otomatik gruplama yap
+    # Prefix'e göre grupla (ad1, ad2 -> ad grubu)
+    grouped_labels = {}
+    for field_label in template.non_custom_labels:
+        # Sayısal son eki ayır (örn: "ad12" -> ("ad", "12"))
+        match = re.match(r'^([a-zA-Z_]+)(\d+)$', field_label)
+        if match:
+            prefix = match.group(1)
+            number = int(match.group(2))
+            # Sadece belirlenen prefix'leri birleştir, diğerlerini ayrı bırak
+            if prefix in MERGE_PREFIXES:
+                if prefix not in grouped_labels:
+                    grouped_labels[prefix] = []
+                grouped_labels[prefix].append((number, field_label))
+            else:
+                # Sorular (q1, q2, ...) gibi alanları ayrı bırak
+                concatenated_response[field_label] = omr_response[field_label]
+        else:
+            # Numaralı değilse direkt ekle
+            concatenated_response[field_label] = omr_response[field_label]
+    
+    # Grupları birleştir
+    for prefix, items in grouped_labels.items():
+        # Numaraya göre sırala
+        items.sort(key=lambda x: x[0])
+        # Değerleri birleştir - boş değerleri boşluk karakterine çevir
+        values = []
+        for _, label in items:
+            val = omr_response[label]
+            # Boş string ise boşluk yap (isimler arası boşluk için)
+            values.append(val if val else " ")
+        combined_value = "".join(values)
+        # Baştaki ve sondaki boşlukları temizle
+        concatenated_response[prefix] = combined_value.strip()
+    
+    return concatenated_response
+
+
+def get_grouped_output_columns(output_columns):
+    """
+    output_columns listesini gruplandırır.
+    ad1, ad2, ad3 gibi numaralı sütunları "ad" olarak tek sütuna dönüştürür.
+    Sırayı korur - ilk görülen prefix'in pozisyonunu kullanır.
+    """
+    grouped_columns = []
+    seen_prefixes = set()
+    
+    for col in output_columns:
+        # Sayısal son eki ayır (örn: "ad12" -> ("ad", "12"))
+        match = re.match(r'^([a-zA-Z_]+)(\d+)$', col)
+        if match:
+            prefix = match.group(1)
+            if prefix not in seen_prefixes:
+                seen_prefixes.add(prefix)
+                grouped_columns.append(prefix)
+        else:
+            # Numaralı değilse direkt ekle (eğer daha önce eklenmemişse)
+            if col not in seen_prefixes:
+                seen_prefixes.add(col)
+                grouped_columns.append(col)
+    
+    return grouped_columns
+
+
 def open_config_with_defaults(config_path):
     user_tuning_config = load_json(config_path)
     user_tuning_config = OVERRIDE_MERGER.merge(

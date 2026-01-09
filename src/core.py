@@ -300,7 +300,6 @@ class ImageInstanceOps:
                     #     img[st[1] : end[1], st[0]+shift : end[0]+shift],0,config=config)
 
                     # TODO: get rid of total_q_box_no
-                    detected_bubbles = []
                     field_type = getattr(field_block_bubbles[0], "field_type", None)
                     apply_median_delta_filter = field_type in {
                         "QTYPE_INT",
@@ -315,15 +314,31 @@ class ImageInstanceOps:
                         if apply_median_delta_filter
                         else None
                     )
+                    
+                    # İlk geçiş: tüm işaretli görünen bubble'ları topla
+                    candidate_bubbles = []  # (bubble, bubble_val) tuple'ları
                     for bubble, bubble_val in zip(field_block_bubbles, q_strip_vals):
-                        x, y = (bubble.x + field_block.shift, bubble.y)
                         bubble_is_marked = per_q_strip_threshold > bubble_val
                         if apply_median_delta_filter:
                             bubble_is_marked = bubble_is_marked and (
                                 (strip_median - bubble_val) >= min_dark_delta
                             )
                         if bubble_is_marked:
-                            detected_bubbles.append(bubble)
+                            candidate_bubbles.append((bubble, bubble_val))
+                    
+                    # Birden fazla işaretli görünüyorsa, sadece en koyusunu (en düşük değerli) seç
+                    if len(candidate_bubbles) > 1:
+                        darkest = min(candidate_bubbles, key=lambda item: item[1])
+                        candidate_bubbles = [darkest]
+                    
+                    # Seçilen bubble'ların set'ini oluştur
+                    selected_bubbles = {b for b, _ in candidate_bubbles}
+                    detected_bubbles = list(selected_bubbles)
+                    
+                    # Görsel işaretleme yap
+                    for bubble, bubble_val in zip(field_block_bubbles, q_strip_vals):
+                        x, y = (bubble.x + field_block.shift, bubble.y)
+                        if bubble in selected_bubbles:
                             field_value = bubble.field_value
                             cv2.rectangle(
                                 final_marked,

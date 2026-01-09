@@ -61,11 +61,12 @@ def setup_outputs_for_template(paths, template):
     # Include current output paths
     ns.paths = paths
 
-    ns.empty_resp = [""] * len(template.output_columns)
+    # Gruplandırılmış sütunları kullan (ad1, ad2, ad3 -> ad)
+    ns.empty_resp = [""] * len(template.grouped_output_columns)
     ns.sheetCols = [
         "file_id",
         "score",
-    ] + template.output_columns
+    ] + template.grouped_output_columns
     ns.OUTPUT_SET = []
     ns.files_obj = {}
     # Use UTC timestamp for deterministic file naming (also avoids timezone-dependent test failures).
