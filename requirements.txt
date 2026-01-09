@@ -50,6 +50,9 @@ werkzeug>=2.3.0
 # Windows TWAIN scanner support
 pytwain>=2.1.0; platform_system=="Windows"
 
+# Windows API access (for printer name resolution)
+pywin32>=306; platform_system=="Windows"
+
 # Linux SANE scanner support (optional, uncomment if needed)
 # python-sane>=2.9.1; platform_system=="Linux"
 

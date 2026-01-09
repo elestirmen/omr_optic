@@ -654,17 +654,114 @@ class ScannerService:
         
         with self._twain_source_manager() as sm:
             sources = sm.GetSourceList() or []
-            
-        for i, name in enumerate(sources):
+        
+        logger.debug(f"TWAIN sources found: {sources}")
+        
+        # Get Windows printer names for better identification
+        windows_printers = self._get_windows_printer_mapping(sources)
+        
+        # Count occurrences of each source name to detect duplicates
+        name_counts = {}
+        for name in sources:
+            name_counts[name] = name_counts.get(name, 0) + 1
+        
+        # Track how many times we've seen each name (for handling duplicates)
+        name_seen = {}
+        
+        for i, twain_name in enumerate(sources):
             cached = self.device_capabilities.get(i, {})
+            
+            # Determine display name
+            display_name = twain_name
+            matching_printers = windows_printers.get(twain_name, [])
+            
+            # If there are duplicates with same TWAIN name
+            if name_counts[twain_name] > 1:
+                name_seen[twain_name] = name_seen.get(twain_name, 0) + 1
+                occurrence = name_seen[twain_name]
+                
+                # Try to match with Windows printer names
+                if occurrence <= len(matching_printers):
+                    # Use Windows printer name
+                    display_name = matching_printers[occurrence - 1]
+                else:
+                    # Fallback: add occurrence number
+                    display_name = f"{twain_name} ({occurrence})"
+            elif len(matching_printers) == 1:
+                # Single device, single match - use Windows name
+                display_name = matching_printers[0]
+            
             devices.append({
                 'id': i,
-                'name': name,
+                'name': display_name,
+                'twain_source': twain_name,  # Keep original TWAIN source name
                 'type': 'TWAIN',
                 'adf_capable': cached.get('adf_capable')
             })
         
         return devices
+    
+    def _get_windows_printer_mapping(self, twain_sources: List[str]) -> Dict[str, List[str]]:
+        """
+        Get mapping of TWAIN source names to Windows printer names.
+        Uses model number matching (e.g., WF-M5899) to find corresponding Windows printers.
+        
+        Args:
+            twain_sources: List of TWAIN source names to match
+            
+        Returns:
+            Dict where key is TWAIN source name and value is list of Windows printer names
+        """
+        import re
+        
+        try:
+            import win32print
+            
+            # EnumPrinters with level 2 gives detailed info
+            printers = win32print.EnumPrinters(
+                win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS,
+                None,
+                2  # Level 2 for detailed info
+            )
+            
+            # Get all Windows printer names
+            windows_printer_names = [p['pPrinterName'] for p in printers]
+            logger.debug(f"Windows printers found: {windows_printer_names}")
+            
+            mapping = {}
+            
+            for twain_name in twain_sources:
+                # Extract model number from TWAIN source name
+                # e.g., "EPSON WF-M5899 Series" -> "WF-M5899"
+                # Common patterns: WF-M5899, L3150, ET-2720, XP-4100, etc.
+                model_match = re.search(r'([A-Z]{1,3}[-]?[A-Z]?\d{3,5}[A-Z]?)', twain_name, re.IGNORECASE)
+                
+                if model_match:
+                    model_number = model_match.group(1)
+                    logger.debug(f"Extracted model number '{model_number}' from '{twain_name}'")
+                    
+                    # Find all Windows printers containing this model number
+                    matching = [p for p in windows_printer_names if model_number.lower() in p.lower()]
+                    if matching:
+                        mapping[twain_name] = matching
+                        logger.debug(f"Matched '{twain_name}' to Windows printers: {matching}")
+                else:
+                    # Fallback: try direct substring matching
+                    # Remove common suffixes like "Series", "Printer"
+                    clean_name = re.sub(r'\s*(Series|Printer|Scanner)$', '', twain_name, flags=re.IGNORECASE).strip()
+                    matching = [p for p in windows_printer_names if clean_name.lower() in p.lower()]
+                    if matching:
+                        mapping[twain_name] = matching
+            
+            logger.info(f"TWAIN to Windows printer mapping: {mapping}")
+            return mapping
+            
+        except ImportError:
+            logger.debug("win32print not available, cannot get Windows printer names")
+            return {}
+        except Exception as e:
+            logger.warning(f"Failed to get Windows printer mapping: {e}")
+            return {}
     
     def _list_sane_devices(self) -> List[Dict[str, Any]]:
         """List SANE devices (internal, no retry)"""
