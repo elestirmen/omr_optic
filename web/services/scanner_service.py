@@ -655,43 +655,37 @@ class ScannerService:
         with self._twain_source_manager() as sm:
             sources = sm.GetSourceList() or []
         
-        logger.debug(f"TWAIN sources found: {sources}")
+        logger.info(f"Raw TWAIN sources found: {sources}")
         
         # Get Windows printer names for better identification
         windows_printers = self._get_windows_printer_mapping(sources)
         
-        # Count occurrences of each source name to detect duplicates
-        name_counts = {}
-        for name in sources:
-            name_counts[name] = name_counts.get(name, 0) + 1
-        
-        # Track how many times we've seen each name (for handling duplicates)
-        name_seen = {}
+        # Track used display names to prevent duplicates
+        used_names = set()
         
         for i, twain_name in enumerate(sources):
             cached = self.device_capabilities.get(i, {})
             
-            # Determine display name
+            # 1. Try to find a nice Windows printer name
             display_name = twain_name
             matching_printers = windows_printers.get(twain_name, [])
             
-            # If there are duplicates with same TWAIN name
-            if name_counts[twain_name] > 1:
-                name_seen[twain_name] = name_seen.get(twain_name, 0) + 1
-                occurrence = name_seen[twain_name]
+            if matching_printers:
+                # Use the first matching Windows printer name
+                candidate_name = matching_printers[0]
                 
-                # Try to match with Windows printer names
-                if occurrence <= len(matching_printers):
-                    # Use Windows printer name
-                    display_name = matching_printers[occurrence - 1]
+                # If this name is already taken by another source, append the TWAIN name for clarity
+                if candidate_name in used_names:
+                     display_name = f"{candidate_name} [{twain_name}]"
                 else:
-                    # Fallback: add occurrence number
-                    display_name = f"{twain_name} ({occurrence})"
-            elif len(matching_printers) >= 1:
-                # Single TWAIN source - use first matching Windows name
-                # If multiple Windows printers match, use the first one
-                display_name = matching_printers[0]
-                logger.info(f"Matched TWAIN '{twain_name}' to Windows printer '{display_name}'")
+                    display_name = candidate_name
+            else:
+                # If no Windows match, use TWAIN name. 
+                # If TWAIN name itself was somehow used (unlikely for raw sources), handle it.
+                if twain_name in used_names:
+                    display_name = f"{twain_name} ({i+1})"
+            
+            used_names.add(display_name)
             
             devices.append({
                 'id': i,
