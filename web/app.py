@@ -5,6 +5,10 @@ Flask-based web application for OMR processing with scanner support.
 Author: Gemini Assistant
 """
 
+# Eventlet monkey patching must be done FIRST, before any other imports
+import eventlet
+eventlet.monkey_patch()
+
 import os
 import sys
 import uuid

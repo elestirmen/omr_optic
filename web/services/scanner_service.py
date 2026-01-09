@@ -687,9 +687,11 @@ class ScannerService:
                 else:
                     # Fallback: add occurrence number
                     display_name = f"{twain_name} ({occurrence})"
-            elif len(matching_printers) == 1:
-                # Single device, single match - use Windows name
+            elif len(matching_printers) >= 1:
+                # Single TWAIN source - use first matching Windows name
+                # If multiple Windows printers match, use the first one
                 display_name = matching_printers[0]
+                logger.info(f"Matched TWAIN '{twain_name}' to Windows printer '{display_name}'")
             
             devices.append({
                 'id': i,
