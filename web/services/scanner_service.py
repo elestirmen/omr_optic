@@ -1304,11 +1304,6 @@ class ScannerService:
             if device_id == 'simulator' or (self.scanner is None and not is_wia_device):
                 # Simulated scanning for testing
                 self._simulate_scan(session_folder)
-            elif is_wia_device and self.scanner == 'twain' and show_ui:
-                # For WIA devices, prefer TWAIN with UI if available
-                # This allows using Epson Scan 2 which can select between multiple scanners
-                # Use TWAIN's default source (user selects scanner in Epson Scan UI)
-                self._scan_twain(session_folder, None, use_adf, show_ui=show_ui)
             elif is_wia_device:
                 # WIA scanning (Windows) - fallback if TWAIN not available
                 self._scan_wia(session_folder, device_id, use_adf, show_ui=show_ui)
@@ -1701,17 +1696,16 @@ class ScannerService:
                 
                 try:
                     if show_ui:
-                        # Show native WIA dialog
+                        # Use WIA CommonDialog on the already-selected device/item.
+                        # ShowAcquireImage can ignore our selected device and use the default device;
+                        # ShowTransfer keeps the transfer bound to the item we opened.
                         wia_dialog = win32com.client.Dispatch("WIA.CommonDialog")
-                        image_file = wia_dialog.ShowAcquireImage(
-                            1,  # DeviceType: Scanner
-                            1,  # Intent: Color
-                            1,  # Bias: MinimizeSize
-                            "{00000000-0000-0000-0000-000000000000}",  # FormatID: Auto
-                            False,  # AlwaysSelectDevice
-                            True,   # UseCommonUI
-                            False   # CancelError
-                        )
+                        png_format_id = "{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}"  # PNG
+                        try:
+                            image_file = wia_dialog.ShowTransfer(scan_item, png_format_id)
+                        except TypeError:
+                            # Some COM bindings expose ShowTransfer(item) without FormatID
+                            image_file = wia_dialog.ShowTransfer(scan_item)
                         
                         if image_file is None:
                             if page_count == 0:

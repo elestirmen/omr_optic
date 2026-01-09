@@ -195,7 +195,8 @@ async function loadDevices(forceRefresh = false) {
                 else if (device.type === 'WIA') typeIcon = '🖨️';
                 else if (device.type === 'SANE') typeIcon = '🐧';
                 
-                option.textContent = `${typeIcon} ${device.name}`;
+                const typeLabel = device.type ? ` (${device.type})` : '';
+                option.textContent = `${typeIcon} ${device.name}${typeLabel}`;
                 option.dataset.adf = device.adf_capable;
                 option.dataset.type = device.type;
                 deviceSelect.appendChild(option);
