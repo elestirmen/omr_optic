@@ -319,6 +319,7 @@ class ScannerService:
         'device_cache_ttl': 60,            # Seconds to cache device list
         'max_retries': 3,                  # Maximum retry attempts
         'retry_base_delay': 1.0,           # Base delay for exponential backoff
+        'enable_wia': True,                # Enable WIA device discovery on Windows
     }
     
     # User-friendly error messages (Turkish)
@@ -613,7 +614,7 @@ class ScannerService:
     
     def _list_local_devices_with_retry(self) -> tuple:
         """
-        List local TWAIN/SANE devices with retry logic.
+        List local TWAIN/SANE/WIA devices with retry logic.
         Returns (devices_list, error_message)
         """
         max_retries = self.config['max_retries']
@@ -627,6 +628,24 @@ class ScannerService:
                     devices = self._list_twain_devices()
                 elif self.scanner == 'sane':
                     devices = self._list_sane_devices()
+                
+                # On Windows, also check WIA devices (many scanners only have WIA drivers)
+                if PLATFORM == 'Windows' and self.config.get('enable_wia', True):
+                    wia_devices = self._list_wia_devices()
+                    # Merge WIA devices, avoiding duplicates with TWAIN/network devices only
+                    # (not with other WIA devices - they might be different physical units of same model)
+                    existing_non_wia_names = {d.get('name', '').lower() for d in devices if d.get('type') != 'WIA'}
+                    for wia_dev in wia_devices:
+                        # Check if this device is already listed as TWAIN/network (by similar name)
+                        wia_name_lower = wia_dev.get('name', '').lower()
+                        is_duplicate = False
+                        for existing_name in existing_non_wia_names:
+                            # Check for partial match (model number match)
+                            if self._device_names_match(existing_name, wia_name_lower):
+                                is_duplicate = True
+                                break
+                        if not is_duplicate:
+                            devices.append(wia_dev)
                 
                 return devices, None  # Success
                 
@@ -647,6 +666,40 @@ class ScannerService:
                 time.sleep(delay)
         
         return [], last_error
+    
+    @staticmethod
+    def _device_names_match(name1: str, name2: str) -> bool:
+        """Check if two device names likely refer to the same device."""
+        import re
+        
+        # First, extract unique device identifiers like EPSON6EC945, EPSON6EE361
+        # These are unique per physical device and should NOT match different devices
+        device_id_pattern = r'([A-Z]+\d[A-Z0-9]{4,8})'
+        
+        device_ids1 = set(m.upper() for m in re.findall(device_id_pattern, name1, re.IGNORECASE))
+        device_ids2 = set(m.upper() for m in re.findall(device_id_pattern, name2, re.IGNORECASE))
+        
+        # If both have unique device IDs, they must match for devices to be the same
+        if device_ids1 and device_ids2:
+            # If they have different device IDs, they're different devices
+            if not (device_ids1 & device_ids2):
+                return False
+            # If they have the same device ID, they're the same device
+            return True
+        
+        # Fallback: Extract model numbers (like WF-M5899)
+        model_pattern = r'([A-Z]{1,3}[-]?[A-Z]?\d{3,5}[A-Z]?)'
+        
+        models1 = set(m.lower() for m in re.findall(model_pattern, name1, re.IGNORECASE))
+        models2 = set(m.lower() for m in re.findall(model_pattern, name2, re.IGNORECASE))
+        
+        # If both have model numbers and they overlap, might be the same device
+        # But only if no unique device IDs were found
+        if models1 and models2:
+            return bool(models1 & models2)
+        
+        # Fallback: check if one name contains the other
+        return name1 in name2 or name2 in name1
     
     def _list_twain_devices(self) -> List[Dict[str, Any]]:
         """List TWAIN devices (internal, no retry)"""
@@ -779,6 +832,160 @@ class ScannerService:
         
         return devices
     
+    def _list_wia_devices(self) -> List[Dict[str, Any]]:
+        """
+        List WIA (Windows Image Acquisition) devices.
+        Many modern scanners on Windows only have WIA drivers, not TWAIN.
+        """
+        devices = []
+        
+        if PLATFORM != 'Windows':
+            return devices
+        
+        try:
+            import win32com.client
+            
+            # Create WIA DeviceManager
+            device_manager = win32com.client.Dispatch("WIA.DeviceManager")
+            
+            # Iterate through all WIA devices
+            for i in range(1, device_manager.DeviceInfos.Count + 1):
+                try:
+                    device_info = device_manager.DeviceInfos.Item(i)
+                    
+                    # WIA device types: 1=Scanner, 2=Camera, 3=Video
+                    # We only want scanners (type 1)
+                    device_type = device_info.Type
+                    if device_type != 1:  # Not a scanner
+                        continue
+                    
+                    # Get device properties
+                    device_id = device_info.DeviceID
+                    device_name = None
+                    manufacturer = None
+                    
+                    # Extract properties
+                    for prop in device_info.Properties:
+                        if prop.PropertyID == 7:  # WIA_DIP_DEV_NAME
+                            device_name = prop.Value
+                        elif prop.PropertyID == 3:  # WIA_DIP_DEV_DESC
+                            if not device_name:
+                                device_name = prop.Value
+                        elif prop.PropertyID == 5:  # WIA_DIP_VEND_DESC (manufacturer)
+                            manufacturer = prop.Value
+                    
+                    if not device_name:
+                        device_name = f"WIA Scanner {i}"
+                    
+                    # Try to get better name from Windows printer list
+                    # WIA names often lack location info that Windows printers have
+                    display_name = self._get_windows_printer_name_for_wia(device_name) or device_name
+                    
+                    # Fallback: Format display name with manufacturer
+                    if display_name == device_name:
+                        manufacturer_str = str(manufacturer) if manufacturer else ""
+                        if manufacturer_str and manufacturer_str.lower() not in device_name.lower() and not manufacturer_str.isdigit():
+                            display_name = f"{manufacturer_str} {device_name}"
+                    
+                    # Check for ADF capability by trying to connect and check properties
+                    adf_capable = self._check_wia_adf_capability(device_info)
+                    
+                    devices.append({
+                        'id': f"wia:{device_id}",
+                        'name': display_name,
+                        'type': 'WIA',
+                        'wia_device_id': device_id,
+                        'adf_capable': adf_capable,
+                    })
+                    
+                    logger.info(f"Found WIA scanner: {display_name} (ID: {device_id})")
+                    
+                except Exception as e:
+                    logger.debug(f"Error accessing WIA device {i}: {e}")
+                    continue
+            
+            logger.info(f"WIA discovery found {len(devices)} scanner(s)")
+            
+        except ImportError:
+            logger.debug("pywin32 not installed, WIA discovery disabled. Install with: pip install pywin32")
+        except Exception as e:
+            logger.warning(f"WIA device enumeration failed: {e}")
+        
+        return devices
+    
+    def _get_windows_printer_name_for_wia(self, wia_device_name: str) -> Optional[str]:
+        """
+        Try to find the full Windows printer name for a WIA device.
+        Windows printer names often include location info (e.g., 'alt_kat', 'ust_kat')
+        that WIA device names don't have.
+        """
+        try:
+            import win32print
+            import re
+            
+            # Extract device identifier from WIA name (e.g., EPSON6EE361 from "EPSON6EE361 (WF-M5899 Series)")
+            device_id_match = re.search(r'^([A-Z]+\d[A-Z0-9]+)', wia_device_name, re.IGNORECASE)
+            if not device_id_match:
+                return None
+            
+            device_id = device_id_match.group(1).upper()
+            
+            # Get all Windows printers
+            printers = win32print.EnumPrinters(
+                win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS,
+                None, 2
+            )
+            
+            # Find printer with matching device ID
+            for printer in printers:
+                printer_name = printer.get('pPrinterName', '')
+                if device_id.lower() in printer_name.lower():
+                    logger.debug(f"WIA device '{wia_device_name}' matched to Windows printer '{printer_name}'")
+                    return printer_name
+            
+            return None
+            
+        except ImportError:
+            logger.debug("win32print not available for WIA name lookup")
+            return None
+        except Exception as e:
+            logger.debug(f"Failed to get Windows printer name for WIA: {e}")
+            return None
+    
+    def _check_wia_adf_capability(self, device_info) -> Optional[bool]:
+        """Check if a WIA device has ADF capability."""
+        try:
+            # Try to connect to device and check for document feeder
+            device = device_info.Connect()
+            
+            # Check device items for feeder
+            for item in device.Items:
+                try:
+                    # Item category: 1=Flatbed, 2=Feeder, 3=Film
+                    for prop in item.Properties:
+                        if prop.PropertyID == 4110:  # WIA_IPA_ITEM_CATEGORY
+                            if prop.Value == 2:  # Feeder category
+                                return True
+                except Exception:
+                    pass
+            
+            # Alternative: check device properties for document handling capabilities
+            for prop in device.Properties:
+                try:
+                    # WIA_DPS_DOCUMENT_HANDLING_CAPABILITIES (3086)
+                    if prop.PropertyID == 3086:
+                        # Bit flags: 1=Feed, 2=Flat, 4=Duplex, 8=Detect_Flat, etc.
+                        if prop.Value & 1:  # Has feeder capability
+                            return True
+                except Exception:
+                    pass
+            
+            return False
+            
+        except Exception as e:
+            logger.debug(f"Could not check WIA ADF capability: {e}")
+            return None
+    
     def _discover_network_devices(self) -> List[Dict[str, Any]]:
         """Discover network scanners via Zeroconf/mDNS"""
         try:
@@ -817,7 +1024,12 @@ class ScannerService:
             self.device_capabilities[normalized_id] = caps
             return caps
 
-        if self.scanner is None:
+        # Check if this is a WIA device
+        is_wia_device = isinstance(normalized_id, str) and normalized_id.startswith('wia:')
+        
+        if is_wia_device:
+            caps = self._get_wia_capabilities(normalized_id)
+        elif self.scanner is None:
             return {
                 'device_id': normalized_id,
                 'scanner_type': 'none',
@@ -825,8 +1037,7 @@ class ScannerService:
                 'detected_at': datetime.now().isoformat(),
                 'error': 'Scanner backend not available',
             }
-
-        if self.scanner == 'twain':
+        elif self.scanner == 'twain':
             caps = self._get_twain_capabilities(normalized_id)
         elif self.scanner == 'sane':
             caps = self._get_sane_capabilities(normalized_id)
@@ -985,6 +1196,59 @@ class ScannerService:
                 'error': str(e),
             }
     
+    def _get_wia_capabilities(self, device_id: str) -> Dict[str, Any]:
+        """Get capabilities for a WIA device."""
+        detected_at = datetime.now().isoformat()
+        
+        try:
+            # First try to get from cached device list
+            devices = self.list_devices()
+            match = next((d for d in devices if d.get('id') == device_id), None)
+            
+            if match and match.get('adf_capable') is not None:
+                return {
+                    'device_id': device_id,
+                    'scanner_type': 'wia',
+                    'adf_capable': match.get('adf_capable'),
+                    'detected_at': detected_at,
+                    'detected_by': 'wia.device_list_cache',
+                }
+            
+            # If not in cache or adf_capable is None, try to detect directly
+            wia_device_id = device_id.replace('wia:', '', 1) if device_id.startswith('wia:') else device_id
+            
+            import win32com.client
+            device_manager = win32com.client.Dispatch("WIA.DeviceManager")
+            
+            for i in range(1, device_manager.DeviceInfos.Count + 1):
+                device_info = device_manager.DeviceInfos.Item(i)
+                if device_info.DeviceID == wia_device_id:
+                    adf_capable = self._check_wia_adf_capability(device_info)
+                    return {
+                        'device_id': device_id,
+                        'scanner_type': 'wia',
+                        'adf_capable': adf_capable,
+                        'detected_at': detected_at,
+                        'detected_by': 'wia.direct_check',
+                    }
+            
+            return {
+                'device_id': device_id,
+                'scanner_type': 'wia',
+                'adf_capable': match.get('adf_capable') if match else None,
+                'detected_at': detected_at,
+                'detected_by': 'wia.device_list',
+            }
+            
+        except Exception as e:
+            return {
+                'device_id': device_id,
+                'scanner_type': 'wia',
+                'adf_capable': None,
+                'detected_at': detected_at,
+                'error': str(e),
+            }
+    
     def scan(
         self,
         session_id: str,
@@ -1034,9 +1298,20 @@ class ScannerService:
                  auto_process: bool, template_id: Optional[str], show_ui: bool):
         """Perform the actual scanning operation"""
         try:
-            if device_id == 'simulator' or self.scanner is None:
+            # Check if this is a WIA device
+            is_wia_device = isinstance(device_id, str) and device_id.startswith('wia:')
+            
+            if device_id == 'simulator' or (self.scanner is None and not is_wia_device):
                 # Simulated scanning for testing
                 self._simulate_scan(session_folder)
+            elif is_wia_device and self.scanner == 'twain' and show_ui:
+                # For WIA devices, prefer TWAIN with UI if available
+                # This allows using Epson Scan 2 which can select between multiple scanners
+                # Use TWAIN's default source (user selects scanner in Epson Scan UI)
+                self._scan_twain(session_folder, None, use_adf, show_ui=show_ui)
+            elif is_wia_device:
+                # WIA scanning (Windows) - fallback if TWAIN not available
+                self._scan_wia(session_folder, device_id, use_adf, show_ui=show_ui)
             elif self.scanner == 'twain':
                 self._scan_twain(session_folder, device_id, use_adf, show_ui=show_ui)
             elif self.scanner == 'sane':
@@ -1322,6 +1597,221 @@ class ScannerService:
             
         except Exception as e:
             raise Exception(f"SANE scan error: {e}")
+    
+    def _scan_wia(
+        self,
+        session_folder: Path,
+        device_id: str,
+        use_adf: bool,
+        *,
+        show_ui: bool = True,
+    ):
+        """
+        Scan using WIA (Windows Image Acquisition).
+        
+        Args:
+            session_folder: Folder to save scanned images
+            device_id: WIA device ID (format: "wia:device_id_string")
+            use_adf: Whether to use ADF if available
+            show_ui: Whether to show the scanner's native UI
+        """
+        if PLATFORM != 'Windows':
+            raise Exception("WIA tarama sadece Windows'ta desteklenir")
+        
+        try:
+            import win32com.client
+            from PIL import Image
+            import io
+        except ImportError as e:
+            raise Exception(f"WIA tarama için gerekli paketler eksik: {e}. pip install pywin32 pillow")
+        
+        # Extract actual WIA device ID
+        wia_device_id = device_id.replace('wia:', '', 1) if device_id.startswith('wia:') else device_id
+        
+        try:
+            # Create WIA DeviceManager and find our device
+            device_manager = win32com.client.Dispatch("WIA.DeviceManager")
+            device = None
+            
+            for i in range(1, device_manager.DeviceInfos.Count + 1):
+                device_info = device_manager.DeviceInfos.Item(i)
+                if device_info.DeviceID == wia_device_id:
+                    device = device_info.Connect()
+                    break
+            
+            if not device:
+                raise Exception(f"WIA cihazı bulunamadı: {wia_device_id}")
+            
+            # Find the scanner item (flatbed or feeder)
+            scan_item = None
+            feeder_item = None
+            flatbed_item = None
+            
+            for item in device.Items:
+                try:
+                    # Check item category
+                    for prop in item.Properties:
+                        if prop.PropertyID == 4110:  # WIA_IPA_ITEM_CATEGORY
+                            if prop.Value == 2:  # Feeder
+                                feeder_item = item
+                            elif prop.Value == 1:  # Flatbed
+                                flatbed_item = item
+                            break
+                except Exception:
+                    pass
+                
+                # If no category found, use first item
+                if scan_item is None:
+                    scan_item = item
+            
+            # Choose between feeder and flatbed based on use_adf setting
+            adf_effective = False
+            if use_adf and feeder_item:
+                scan_item = feeder_item
+                adf_effective = True
+                logger.info("WIA: Using document feeder (ADF)")
+            elif flatbed_item:
+                scan_item = flatbed_item
+                logger.info("WIA: Using flatbed scanner")
+            elif not scan_item:
+                # Use first item if no specific category found
+                if device.Items.Count > 0:
+                    scan_item = device.Items.Item(1)
+                else:
+                    raise Exception("WIA cihazında tarama öğesi bulunamadı")
+            
+            if use_adf and not adf_effective:
+                self._add_warning(
+                    "ADF bu cihazda bulunamadı veya aktif değil. Düz yatak taraması yapılacak."
+                )
+            
+            # Configure scan settings
+            try:
+                self._configure_wia_item(scan_item)
+            except Exception as e:
+                logger.debug(f"WIA configuration warning: {e}")
+            
+            # Perform scan(s)
+            page_count = 0
+            max_pages = 1000 if adf_effective else 1  # Limit for safety
+            
+            while page_count < max_pages:
+                if not self.status.get('scanning', False):
+                    break
+                
+                try:
+                    if show_ui:
+                        # Show native WIA dialog
+                        wia_dialog = win32com.client.Dispatch("WIA.CommonDialog")
+                        image_file = wia_dialog.ShowAcquireImage(
+                            1,  # DeviceType: Scanner
+                            1,  # Intent: Color
+                            1,  # Bias: MinimizeSize
+                            "{00000000-0000-0000-0000-000000000000}",  # FormatID: Auto
+                            False,  # AlwaysSelectDevice
+                            True,   # UseCommonUI
+                            False   # CancelError
+                        )
+                        
+                        if image_file is None:
+                            if page_count == 0:
+                                raise Exception("Tarama iptal edildi veya başarısız oldu")
+                            break
+                        
+                        # Save the image
+                        filename = self._allocate_scan_filename(session_folder, "png")
+                        filepath = session_folder / filename
+                        
+                        # Convert WIA ImageFile to PIL Image and save
+                        img_data = image_file.FileData.BinaryData
+                        img = Image.open(io.BytesIO(img_data))
+                        img.save(str(filepath), 'PNG')
+                        
+                        page_count += 1
+                        self.status['pages_scanned'] = self._count_scanned_pages(session_folder)
+                        self.status['progress'] = min(self.status['pages_scanned'] * 10, 99)
+                        self._emit_status('page_scanned', {
+                            'page': self.status['pages_scanned'],
+                            'filename': filename
+                        })
+                        
+                        # UI mode: only scan once unless user explicitly scans again
+                        if not adf_effective:
+                            break
+                    else:
+                        # Programmatic scan without UI
+                        image_file = scan_item.Transfer("{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}")  # PNG format
+                        
+                        if image_file is None:
+                            if page_count == 0:
+                                raise Exception("Tarama başarısız oldu - görüntü alınamadı")
+                            break
+                        
+                        # Save the image
+                        filename = self._allocate_scan_filename(session_folder, "png")
+                        filepath = session_folder / filename
+                        
+                        # Convert WIA ImageFile to file
+                        img_data = image_file.FileData.BinaryData
+                        img = Image.open(io.BytesIO(img_data))
+                        img.save(str(filepath), 'PNG')
+                        
+                        page_count += 1
+                        self.status['pages_scanned'] = self._count_scanned_pages(session_folder)
+                        self.status['progress'] = min(self.status['pages_scanned'] * 10, 99)
+                        self._emit_status('page_scanned', {
+                            'page': self.status['pages_scanned'],
+                            'filename': filename
+                        })
+                        
+                        if not adf_effective:
+                            break
+                        
+                except Exception as e:
+                    error_str = str(e).lower()
+                    # Check for "no more pages" type errors
+                    if 'paper' in error_str or 'empty' in error_str or 'no document' in error_str:
+                        logger.info("WIA: No more pages in feeder")
+                        break
+                    elif page_count > 0:
+                        # We got some pages, so this might just be end of document
+                        logger.info(f"WIA: Scan ended after {page_count} page(s): {e}")
+                        break
+                    else:
+                        raise
+            
+            self.status['progress'] = 100
+            logger.info(f"WIA scan complete: {page_count} page(s) scanned")
+            
+        except Exception as e:
+            raise Exception(f"WIA tarama hatası: {e}")
+    
+    def _configure_wia_item(self, item) -> None:
+        """Configure WIA scan item with optimal settings."""
+        try:
+            # Common WIA property IDs
+            WIA_IPS_CUR_INTENT = 6146      # Current intent (color, grayscale, etc.)
+            WIA_IPS_XRES = 6147            # Horizontal resolution
+            WIA_IPS_YRES = 6148            # Vertical resolution
+            WIA_IPA_DATATYPE = 4103        # Data type (0=B&W, 1=Grayscale, 2=Color)
+            WIA_IPA_DEPTH = 4104           # Bits per pixel
+            
+            for prop in item.Properties:
+                try:
+                    # Set resolution to 300 DPI
+                    if prop.PropertyID == WIA_IPS_XRES:
+                        prop.Value = 300
+                    elif prop.PropertyID == WIA_IPS_YRES:
+                        prop.Value = 300
+                    # Set to color scanning
+                    elif prop.PropertyID == WIA_IPA_DATATYPE:
+                        prop.Value = 2  # Color
+                    elif prop.PropertyID == WIA_IPA_DEPTH:
+                        prop.Value = 24  # 24-bit color
+                except Exception:
+                    pass  # Property might be read-only
+        except Exception as e:
+            logger.debug(f"WIA configuration error: {e}")
     
     def _simulate_scan(self, session_folder: Path):
         """Simulate scanning for testing without real scanner"""

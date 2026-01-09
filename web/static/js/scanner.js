@@ -192,6 +192,7 @@ async function loadDevices(forceRefresh = false) {
                 let typeIcon = '📠';
                 if (device.type === 'eSCL/Network') typeIcon = '🌐';
                 else if (device.type === 'TWAIN') typeIcon = '🖨️';
+                else if (device.type === 'WIA') typeIcon = '🖨️';
                 else if (device.type === 'SANE') typeIcon = '🐧';
                 
                 option.textContent = `${typeIcon} ${device.name}`;
