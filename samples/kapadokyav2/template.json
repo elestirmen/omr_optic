@@ -1,0 +1,122 @@
+{
+  "pageDimensions": [2481, 3506],
+  "bubbleDimensions": [38, 38],
+  "emptyValue": "",
+  "preProcessors": [
+    {
+      "name": "FeatureBasedAlignment",
+      "options": {
+        "reference": "template_image.png",
+        "maxFeatures": 10000,
+        "goodMatchPercent": 0.15,
+        "2d": true
+      }
+    }
+  ],
+  "customLabels": {
+    "Ad_Soyad": ["ad1..20"],
+    "TC_Kimlik": ["tc1..11"],
+    "Ogrenci_No": ["ogr1..9"],
+    "Telefon": ["alan1..3", "tel1..7"]
+  },
+  "outputColumns": [
+    "Ad_Soyad",
+    "TC_Kimlik",
+    "Ogrenci_No",
+    "kitapcik",
+    "q1..120",
+    "Telefon"
+  ],
+  "fieldBlocks": {
+    "Soyadi_Adi": {
+      "fieldType": "QTYPE_TR_ALPHABET",
+      "fieldLabels": ["ad1..20"],
+      "origin": [152, 266],
+      "bubbleDimensions": [36, 36],
+      "bubblesGap": 49,
+      "labelsGap": 49,
+      "direction": "vertical"
+    },
+    "TC_Kimlik_No": {
+      "fieldType": "QTYPE_INT",
+      "fieldLabels": ["tc1..11"],
+      "origin": [1195, 866],
+      "bubbleDimensions": [36, 36],
+      "bubblesGap": 49,
+      "labelsGap": 49,
+      "direction": "vertical"
+    },
+    "Ogrenci_No": {
+      "fieldType": "QTYPE_INT",
+      "fieldLabels": ["ogr1..9"],
+      "origin": [1792, 866],
+      "bubbleDimensions": [36, 36],
+      "bubblesGap": 49,
+      "labelsGap": 49,
+      "direction": "vertical"
+    },
+    "Test_1_30": {
+      "fieldType": "QTYPE_MCQ5",
+      "fieldLabels": ["q1..30"],
+      "origin": [198, 1869],
+      "bubbleDimensions": [36, 36],
+      "bubblesGap": 49,
+      "labelsGap": 49,
+      "direction": "horizontal"
+    },
+    "Test_31_60": {
+      "fieldType": "QTYPE_MCQ5",
+      "fieldLabels": ["q31..60"],
+      "origin": [548, 1869],
+      "bubbleDimensions": [36, 36],
+      "bubblesGap": 49,
+      "labelsGap": 49,
+      "direction": "horizontal"
+    },
+    "Test_61_90": {
+      "fieldType": "QTYPE_MCQ5",
+      "fieldLabels": ["q61..90"],
+      "origin": [898, 1869],
+      "bubbleDimensions": [36, 36],
+      "bubblesGap": 49,
+      "labelsGap": 49,
+      "direction": "horizontal"
+    },
+    "Test_91_120": {
+      "fieldType": "QTYPE_MCQ5",
+      "fieldLabels": ["q91..120"],
+      "origin": [1248, 1869],
+      "bubbleDimensions": [36, 36],
+      "bubblesGap": 49,
+      "labelsGap": 49,
+      "direction": "horizontal"
+    },
+    "Kitapcik_Turu": {
+      "fieldType": "QTYPE_MCQ4",
+      "fieldLabels": ["kitapcik"],
+      "origin": [1695, 1869],
+      "bubbleDimensions": [36, 36],
+      "bubblesGap": 49,
+      "labelsGap": 0,
+      "direction": "horizontal"
+    },
+    "Alan_Kodu": {
+      "fieldType": "QTYPE_INT",
+      "fieldLabels": ["alan1..3"],
+      "origin": [1548, 2068],
+      "bubbleDimensions": [36, 36],
+      "bubblesGap": 49,
+      "labelsGap": 49,
+      "direction": "vertical"
+    },
+    "Telefon_No": {
+      "fieldType": "QTYPE_INT",
+      "fieldLabels": ["tel1..7"],
+      "origin": [1695, 2068],
+      "bubbleDimensions": [36, 36],
+      "bubblesGap": 49,
+      "labelsGap": 49,
+      "direction": "vertical"
+    }
+  }
+}

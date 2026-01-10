@@ -1,0 +1,22 @@
+{
+  "dimensions": {
+    "processing_width": 2481,
+    "processing_height": 3506
+  },
+  "threshold_params": {
+    "MIN_GAP": 30,
+    "MIN_JUMP": 20,
+    "JUMP_DELTA": 25,
+    "CONFIDENT_SURPLUS": 5
+  },
+  "alignment_params": {
+    "auto_align": true,
+    "match_col": 5,
+    "max_steps": 50
+  },
+  "outputs": {
+    "show_image_level": 0,
+    "save_image_level": 1,
+    "filter_out_multimarked_files": false
+  }
+}

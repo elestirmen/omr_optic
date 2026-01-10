@@ -1,34 +1,151 @@
 {
-  "pageDimensions": [
-    2481,
-    3506
-  ],
   "bubbleDimensions": [
     36,
     36
   ],
-  "preProcessors": [
-    {
-      "name": "FeatureBasedAlignment",
-      "options": {
-        "reference": "template_image.png",
-        "maxFeatures": 8000,
-        "goodMatchPercent": 0.25,
-        "2d": false
-      }
-    }
-  ],
   "customLabels": {
-    "TC_Kimlik": [
-      "tc1..11"
-    ],
     "Ogrenci_No": [
       "ogrenci1..8"
+    ],
+    "TC_Kimlik": [
+      "tc1..11"
     ],
     "Telefon": [
       "alan1..3",
       "tel1..7"
     ]
+  },
+  "fieldBlocks": {
+    "Alan_Kodu": {
+      "bubblesGap": 50,
+      "direction": "vertical",
+      "fieldLabels": [
+        "alan1..3"
+      ],
+      "fieldType": "QTYPE_INT",
+      "labelsGap": 50,
+      "origin": [
+        1550,
+        2071
+      ]
+    },
+    "Kitapcik_Turu": {
+      "bubblesGap": 50,
+      "direction": "horizontal",
+      "fieldLabels": [
+        "kitapcik"
+      ],
+      "fieldType": "QTYPE_MCQ4",
+      "labelsGap": 0,
+      "origin": [
+        1699,
+        1871
+      ]
+    },
+    "Ogrenci_No": {
+      "bubblesGap": 50,
+      "direction": "vertical",
+      "fieldLabels": [
+        "ogrenci1..8"
+      ],
+      "fieldType": "QTYPE_INT",
+      "labelsGap": 50,
+      "origin": [
+        1800,
+        868
+      ]
+    },
+    "Soyadi_Adi": {
+      "bubblesGap": 50,
+      "direction": "vertical",
+      "fieldLabels": [
+        "ad1..20"
+      ],
+      "fieldType": "QTYPE_TR_ALPHABET",
+      "labelsGap": 50,
+      "origin": [
+        151,
+        268
+      ]
+    },
+    "TC_Kimlik_No": {
+      "bubblesGap": 50,
+      "direction": "vertical",
+      "fieldLabels": [
+        "tc1..11"
+      ],
+      "fieldType": "QTYPE_INT",
+      "labelsGap": 50,
+      "origin": [
+        1200,
+        869
+      ]
+    },
+    "Telefon_No": {
+      "bubblesGap": 50,
+      "direction": "vertical",
+      "fieldLabels": [
+        "tel1..7"
+      ],
+      "fieldType": "QTYPE_INT",
+      "labelsGap": 50,
+      "origin": [
+        1699,
+        2071
+      ]
+    },
+    "Test_1_30": {
+      "fieldType": "QTYPE_MCQ5",
+      "fieldLabels": [
+        "q1..30"
+      ],
+      "origin": [
+        196,
+        1845
+      ],
+      "bubblesGap": 50,
+      "labelsGap": 50,
+      "direction": "horizontal"
+    },
+    "Test_31_60": {
+      "bubblesGap": 50,
+      "direction": "horizontal",
+      "fieldLabels": [
+        "q31..60"
+      ],
+      "fieldType": "QTYPE_MCQ5",
+      "labelsGap": 50,
+      "origin": [
+        549,
+        1871
+      ]
+    },
+    "Test_61_90": {
+      "bubblesGap": 50,
+      "direction": "horizontal",
+      "fieldLabels": [
+        "q61..90"
+      ],
+      "fieldType": "QTYPE_MCQ5",
+      "labelsGap": 50,
+      "origin": [
+        899,
+        1871
+      ]
+    },
+    "Test_91_120": {
+      "bubblesGap": 50,
+      "direction": "horizontal",
+      "fieldLabels": [
+        "q91..120"
+      ],
+      "fieldType": "QTYPE_MCQ5",
+      "labelsGap": 50,
+      "origin": [
+        1249,
+        1871
+      ]
+    }
   },
   "outputColumns": [
     "ad1..20",
@@ -38,136 +155,19 @@
     "q1..120",
     "Telefon"
   ],
-  "fieldBlocks": {
-    "Soyadi_Adi": {
-      "fieldType": "QTYPE_TR_ALPHABET",
-      "fieldLabels": [
-        "ad1..20"
-      ],
-      "origin": [
-        151,
-        268
-      ],
-      "bubblesGap": 50,
-      "labelsGap": 50,
-      "direction": "vertical"
-    },
-    "TC_Kimlik_No": {
-      "fieldType": "QTYPE_INT",
-      "fieldLabels": [
-        "tc1..11"
-      ],
-      "origin": [
-        1200,
-        869
-      ],
-      "bubblesGap": 50,
-      "labelsGap": 50,
-      "direction": "vertical"
-    },
-    "Ogrenci_No": {
-      "fieldType": "QTYPE_INT",
-      "fieldLabels": [
-        "ogrenci1..8"
-      ],
-      "origin": [
-        1800,
-        868
-      ],
-      "bubblesGap": 50,
-      "labelsGap": 50,
-      "direction": "vertical"
-    },
-    "Test_1_30": {
-      "fieldType": "QTYPE_MCQ5",
-      "fieldLabels": [
-        "q1..30"
-      ],
-      "origin": [
-        200,
-        1871
-      ],
-      "bubblesGap": 50,
-      "labelsGap": 50,
-      "direction": "horizontal"
-    },
-    "Test_31_60": {
-      "fieldType": "QTYPE_MCQ5",
-      "fieldLabels": [
-        "q31..60"
-      ],
-      "origin": [
-        549,
-        1871
-      ],
-      "bubblesGap": 50,
-      "labelsGap": 50,
-      "direction": "horizontal"
-    },
-    "Test_61_90": {
-      "fieldType": "QTYPE_MCQ5",
-      "fieldLabels": [
-        "q61..90"
-      ],
-      "origin": [
-        899,
-        1871
-      ],
-      "bubblesGap": 50,
-      "labelsGap": 50,
-      "direction": "horizontal"
-    },
-    "Test_91_120": {
-      "fieldType": "QTYPE_MCQ5",
-      "fieldLabels": [
-        "q91..120"
-      ],
-      "origin": [
-        1249,
-        1871
-      ],
-      "bubblesGap": 50,
-      "labelsGap": 50,
-      "direction": "horizontal"
-    },
-    "Kitapcik_Turu": {
-      "fieldType": "QTYPE_MCQ4",
-      "fieldLabels": [
-        "kitapcik"
-      ],
-      "origin": [
-        1699,
-        1871
-      ],
-      "bubblesGap": 50,
-      "labelsGap": 0,
-      "direction": "horizontal"
-    },
-    "Alan_Kodu": {
-      "fieldType": "QTYPE_INT",
-      "fieldLabels": [
-        "alan1..3"
-      ],
-      "origin": [
-        1550,
-        2071
-      ],
-      "bubblesGap": 50,
-      "labelsGap": 50,
-      "direction": "vertical"
-    },
-    "Telefon_No": {
-      "fieldType": "QTYPE_INT",
-      "fieldLabels": [
-        "tel1..7"
-      ],
-      "origin": [
-        1699,
-        2071
-      ],
-      "bubblesGap": 50,
-      "labelsGap": 50,
-      "direction": "vertical"
+  "pageDimensions": [
+    2481,
+    3506
+  ],
+  "preProcessors": [
+    {
+      "name": "FeatureBasedAlignment",
+      "options": {
+        "2d": false,
+        "goodMatchPercent": 0.25,
+        "maxFeatures": 8000,
+        "reference": "template_image.png"
+      }
     }
-  }
+  ]
 }
