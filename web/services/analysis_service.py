@@ -17,6 +17,15 @@ try:
 except ImportError:
     HAS_SCIPY = False
 
+# Import CheatingDetector
+try:
+    from src.cheating_analysis import CheatingDetector
+except ImportError:
+    # Handle case where src is not directly importable (e.g. running standalone)
+    import sys
+    sys.path.append(str(Path(__file__).parent.parent.parent))
+    from src.cheating_analysis import CheatingDetector
+
 
 @dataclass
 class StudentResult:
@@ -220,6 +229,61 @@ class AnalysisService:
         # Sort by score descending
         results.sort(key=lambda x: (-x.score, x.student_id))
 
+        # Run Advanced Cheating Analysis
+        # We need to construct the DataFrame expected by CheatingDetector or pass the one we have
+        # CheatingDetector expects a DataFrame with columns matching the questions
+        try:
+            # We already have df with question columns
+            # But df has string answers. CheatingDetector handles strings.
+            # We need to pass the answer key and question columns order
+            
+            # Map answer key (e.g. {"1": "A"}) to column names (e.g. "q1") for CheatingDetector
+            detector_key = {}
+            for q_col in question_cols:
+                q_num = self._extract_question_number(q_col)
+                # Check both string and int keys
+                if str(q_num) in answer_key:
+                    detector_key[q_col] = answer_key[str(q_num)]
+                elif q_num in answer_key:
+                    detector_key[q_col] = answer_key[q_num]
+            
+            # Set index to student IDs for meaningful reporting
+            # We need to extract IDs consistent with the results loop above
+            # or just use the ones we already found?
+            # Creating a fresh ID list from DF to be safe
+            display_ids = []
+            file_col = self._find_file_column(df.columns.tolist())
+            student_cols = self._find_student_columns(df.columns.tolist())
+            
+            for _, row in df.iterrows():
+                file_name = row.get(file_col, "") if file_col else ""
+                s_id = self._extract_student_id(file_name, row, student_cols)
+                s_name = self._extract_student_name(row, student_cols)
+                if s_name:
+                    display_ids.append(f"{s_id} ({s_name})")
+                else:
+                    display_ids.append(s_id)
+            
+            df.index = display_ids
+            
+            detector = CheatingDetector(df, detector_key, question_cols)
+            analysis_results = detector.analyze()
+            
+            cheating_report = {
+                "session_id": session_id,
+                "pairs": analysis_results
+            }
+            
+            cheating_report_path = self.results_folder / session_id / 'cheating_report.json'
+            with open(cheating_report_path, 'w', encoding='utf-8') as f:
+                json.dump(cheating_report, f, ensure_ascii=False, indent=2)
+                
+        except Exception as e:
+            print(f"Cheating analysis failed during scoring: {e}")
+            import traceback
+            traceback.print_exc()
+            # Ensure we don't crash the scoring if this fails
+
         return {
             "success": True,
             "session_id": session_id,
@@ -228,7 +292,8 @@ class AnalysisService:
             "question_columns": question_cols,
             "scoring": scoring,
             "results": [asdict(r) for r in results],
-            "statistics": self._calculate_statistics(results)
+            "statistics": self._calculate_statistics(results),
+            "cheating_report_url": f"/api/results/{session_id}/cheating_report"
         }
 
     def detect_cheating(
@@ -268,101 +333,101 @@ class AnalysisService:
         if not question_cols:
             raise ValueError("No question columns found in results")
 
+        # Map answer key
+        detector_key = {}
+        if answer_key:
+            for q_col in question_cols:
+                q_num = self._extract_question_number(q_col)
+                if str(q_num) in answer_key:
+                    detector_key[q_col] = answer_key[str(q_num)]
+                elif q_num in answer_key:
+                    detector_key[q_col] = answer_key[q_num]
+
+        # Set index to student IDs for meaningful reporting
+        display_ids = []
         file_col = self._find_file_column(df.columns.tolist())
         student_cols = self._find_student_columns(df.columns.tolist())
-
-        # Build student answer vectors
-        students = []
+        
         for _, row in df.iterrows():
             file_name = row.get(file_col, "") if file_col else ""
-            student_id = self._extract_student_id(file_name, row, student_cols)
-            student_name = self._extract_student_name(row, student_cols)
+            s_id = self._extract_student_id(file_name, row, student_cols)
+            s_name = self._extract_student_name(row, student_cols)
+            if s_name:
+                display_ids.append(f"{s_id} ({s_name})")
+            else:
+                display_ids.append(s_id)
+        
+        df.index = display_ids
 
-            answers = []
-            for q_col in question_cols:
-                ans = str(row.get(q_col, "")).strip().upper()
-                if not ans or ans in ("", "*", "-", " "):
-                    answers.append("")
-                else:
-                    answers.append(ans)
+        # Use the new CheatingDetector
+        try:
+            detector = CheatingDetector(df, detector_key, question_cols)
+            analysis_results = detector.analyze()
+        except NameError:
+             # Fallback if import failed
+             from src.cheating_analysis import CheatingDetector
+             detector = CheatingDetector(df, detector_key, question_cols)
+             analysis_results = detector.analyze()
 
-            display_id = student_id
-            if student_name:
-                display_id = f"{student_id} ({student_name})"
-
-            students.append({
-                "file_name": file_name,
-                "student_id": display_id,
-                "answers": answers
-            })
-
-        # Calculate answer frequencies for weighted scoring
-        answer_freq = self._calculate_answer_frequencies(students, len(question_cols))
-
-        # Compare all pairs
-        cheating_pairs = []
-        total_pairs = len(students) * (len(students) - 1) // 2
-
-        for s1, s2 in combinations(students, 2):
-            metrics = self._calculate_cheating_metrics(
-                s1["answers"], s2["answers"], 
-                answer_key, answer_freq, question_cols
-            )
-
-            # Harpp-Hogan Index
-            harpp_hogan = 0.0
-            if metrics["differences"] > 0:
-                harpp_hogan = metrics["eeic"] / metrics["differences"]
-            elif metrics["eeic"] > 0:
-                harpp_hogan = 99.0  # Infinite suspicion if shared errors but no differences
-
-            # Check if suspicious
-            # Harpp-Hogan > 1.0 OR (High WES and enough shared errors)
+        # Filter results based on thresholds
+        # Note: New analysis returns metrics like k_index_ab, gbt_z, etc.
+        # We need to adapt the filtering logic to these new metrics OR just return everything
+        # For compatibility with legacy filtering expectations (threshold, min_shared), 
+        # we can map GBT-Z or K-Index to "suspicion". 
+        
+        # However, the user wants the "Advanced" results. 
+        # So we should return the raw analysis_results but perhaps filter the "suspicious_pairs" count using the new metrics.
+        
+        # Filter for "Significant" pairs to report count
+        suspicious_count = 0
+        filtered_results = []
+        
+        for pair in analysis_results:
+            shared_errors = pair.get('w_agreements', 0)
+            
+            # First check: Must have at least min_shared_errors common wrong answers
+            # This is the primary filter - high correct answer agreement is normal for good students
+            if shared_errors < min_shared_errors:
+                continue  # Skip this pair - not enough shared errors
+            
             is_suspicious = False
             
-            if metrics["eeic"] >= min_shared_errors:
-                if harpp_hogan >= threshold:
-                    is_suspicious = True
-                elif metrics["weighted_score"] > 5.0:  # High weighted score backup
-                    is_suspicious = True
-
-            if is_suspicious:
-                details = []
-                details.append(f"Harpp-Hogan: {harpp_hogan:.2f}")
-                details.append(f"Ortak Yanlış: {metrics['eeic']}")
-                details.append(f"Farklılık: {metrics['differences']}")
+            # Criteria for suspicion in new system:
+            # 1. High Z-Score (GBT) > 3.0 (strong statistical evidence)
+            # 2. Low K-Index (< 0.01) indicating unusual match pattern
+            # Both require min_shared_errors to have already passed above
+            
+            if pair.get('gbt_z', 0) > 3.0:
+                is_suspicious = True
+            elif pair.get('k_index_ab', 1.0) < 0.01 or pair.get('k_index_ba', 1.0) < 0.01:
+                is_suspicious = True
                 
-                if metrics["weighted_score"] > 5.0:
-                    details.append(f"Ağırlıklı Skor: {metrics['weighted_score']:.1f}")
-
-                cheating_pairs.append(CheatingPair(
-                    student1_id=s1["student_id"],
-                    student1_file=s1["file_name"],
-                    student2_id=s2["student_id"],
-                    student2_file=s2["file_name"],
-                    similarity_ratio=harpp_hogan, # Mapped to main score field
-                    pearson_correlation=metrics["weighted_score"], # Using this field for weighted score
-                    common_wrong_answers=metrics["eeic"],
-                    details=" | ".join(details)
-                ))
-
-        # Sort by Harpp-Hogan descending
-        cheating_pairs.sort(key=lambda x: -x.similarity_ratio)
+            if is_suspicious:
+                suspicious_count += 1
+            
+            # Add compatibility fields
+            pair['similarity_ratio'] = pair.get('gbt_z', 0)  # Proxy
+            pair['common_wrong_answers'] = shared_errors
+            pair['student1_id'] = pair.get('student_a')
+            pair['student2_id'] = pair.get('student_b')
+            
+            # Only add if actually suspicious (meets thresholds)
+            if is_suspicious:
+                filtered_results.append(pair)
 
         return {
             "success": True,
             "session_id": session_id,
-            "total_students": len(students),
-            "total_pairs_checked": total_pairs,
-            "suspicious_pairs": len(cheating_pairs),
+            "total_students": len(df),
+            "total_pairs_checked": len(analysis_results),
+            "suspicious_pairs": suspicious_count,
             "thresholds": {
                 "harpp_hogan": threshold,
                 "min_shared_errors": min_shared_errors
             },
-            "has_answer_key": answer_key is not None,
-            "results": [asdict(p) for p in cheating_pairs]
+            "has_answer_key": bool(detector_key),
+            "results": filtered_results
         }
-
     def _calculate_answer_frequencies(self, students: List[Dict], num_questions: int) -> List[Dict[str, float]]:
         """Calculate how frequently each answer is given for each question"""
         freq = [{} for _ in range(num_questions)]

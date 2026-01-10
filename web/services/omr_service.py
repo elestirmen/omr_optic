@@ -16,6 +16,10 @@ from typing import Optional, Dict, Any, List, Tuple
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from src.entry import entry_point, process_dir
+from src.cheating_analysis import CheatingDetector
+from src.evaluation import EvaluationConfig
+from src.template import Template
+from src.utils.parsing import open_config_with_defaults
 
 
 class OMRService:
@@ -578,6 +582,16 @@ class OMRService:
             results["summary"]["active_kind"] = None
             results["summary"]["columns"] = []
 
+        # Run Cheating Analysis if we have results
+        if primary_kind == "results" and primary_kind in dfs:
+            try:
+                self._run_cheating_analysis(session_id, output_folder, dfs["results"])
+                results["cheating_report_url"] = f"/api/results/{session_id}/cheating_report"
+            except Exception as e:
+                print(f"Cheating analysis failed: {e}")
+                import traceback
+                traceback.print_exc()
+
         # Find processed images (return relative paths so nested dirs work)
         image_exts = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff"}
         for img_path in output_folder.rglob("*"):
@@ -654,3 +668,60 @@ class OMRService:
             if kind in csv_map:
                 return kind
         return next(iter(csv_map.keys()), None)
+
+    def _run_cheating_analysis(self, session_id: str, output_folder: Path, df):
+        """
+        Run cheating detection analysis and save report.
+        """
+        session_folder = self.upload_folder / session_id
+        eval_path = session_folder / "evaluation.json"
+        
+        if not eval_path.exists():
+            return
+
+        conf_path = session_folder / "config.json"
+        tuning_config = open_config_with_defaults(conf_path) if conf_path.exists() else open_config_with_defaults(None)
+        
+        template_path = session_folder / "template.json"
+        if not template_path.exists():
+            return
+            
+        template = Template(template_path, tuning_config)
+        
+        # Load evaluation config to get answer key
+        eval_config = EvaluationConfig(session_folder, eval_path, template, tuning_config)
+        
+        # Extract Answer Key
+        # eval_config.question_to_answer_matcher maps q -> matcher
+        # matcher.answer_item is the answer
+        
+        # Ensure df has the columns
+        questions = eval_config.questions_in_order
+        # Verify columns exist in df (sometimes case sensitivity or stripping might affect it)
+        # DF from _collect_results has stripped internals, but headers should match template fields
+        
+        missing = [q for q in questions if q not in df.columns]
+        if missing:
+            print(f"Analysis skipped: Missing columns in result DF: {missing}")
+            return
+            
+        answer_key = {
+            q: eval_config.question_to_answer_matcher[q].answer_item 
+            for q in questions
+            if q in eval_config.question_to_answer_matcher
+        }
+        
+        detector = CheatingDetector(df, answer_key, questions)
+        analysis_results = detector.analyze()
+        
+        # Determine "suspicious" pairs (e.g., p-value < 0.05 or Z > 3)
+        # We'll just save everything, and let frontend filter, 
+        # BUT we might want to sort/summarize here
+        
+        report = {
+            "session_id": session_id,
+            "pairs": analysis_results
+        }
+        
+        with open(output_folder / 'cheating_report.json', 'w', encoding='utf-8') as f:
+            json.dump(report, f, ensure_ascii=False, indent=2)

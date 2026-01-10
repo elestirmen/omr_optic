@@ -204,6 +204,18 @@ def download_csv(session_id):
         return jsonify({'error': 'Results not found'}), 404
 
 
+@app.route('/api/results/<session_id>/cheating_report', methods=['GET'])
+def get_cheating_report(session_id):
+    """Get the advanced cheating detection report"""
+    try:
+        report_path = RESULTS_FOLDER / session_id / 'cheating_report.json'
+        if not report_path.exists():
+            return jsonify({'error': 'Report not found'}), 404
+        return send_file(report_path, mimetype='application/json')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/results/<session_id>/excel', methods=['GET'])
 def download_excel(session_id):
     """Download results as Excel (XLSX)."""
@@ -508,15 +520,44 @@ def download_scores_excel(session_id):
         # Create cheating DataFrame
         df_cheating = pd.DataFrame(cheating_result['results'])
         if not df_cheating.empty:
-            df_cheating = df_cheating.rename(columns={
-                'student1_id': 'Öğrenci 1',
-                'student2_id': 'Öğrenci 2',
-                'similarity_ratio': 'Harpp-Hogan',
-                'pearson_correlation': 'Ağırlıklı Skor',
-                'common_wrong_answers': 'Ortak Yanlış',
-                'details': 'Detaylar'
-            })
-            df_cheating = df_cheating.drop(columns=['student1_file', 'student2_file'], errors='ignore')
+            # Check if advanced metrics exist
+            if 'gbt_z' in df_cheating.columns:
+                df_cheating = df_cheating.rename(columns={
+                    'student_a': 'Öğrenci 1',
+                    'student_b': 'Öğrenci 2',
+                    'score_a': 'Puan 1',
+                    'score_b': 'Puan 2',
+                    'gbt_z': 'Z-Skoru',
+                    'w_agreements': 'Ortak Yanlış',
+                    'agreements': 'Ortak Cevap',
+                    'wrongs_a': 'Yanlış 1',
+                    'wrongs_b': 'Yanlış 2',
+                    'wesolowsky': 'Wesolowsky Skoru',
+                    'k_index_ab': 'K-İndeks (1→2)',
+                    'k_index_ba': 'K-İndeks (2→1)'
+                })
+                # Select all available columns in order
+                cols = ['Öğrenci 1', 'Öğrenci 2', 'Puan 1', 'Puan 2', 
+                        'Z-Skoru', 'Ortak Yanlış', 'Ortak Cevap',
+                        'Yanlış 1', 'Yanlış 2', 'Wesolowsky Skoru',
+                        'K-İndeks (1→2)', 'K-İndeks (2→1)']
+                cols = [c for c in cols if c in df_cheating.columns]
+                df_cheating = df_cheating[cols]
+                if 'Z-Skoru' in df_cheating.columns:
+                    df_cheating = df_cheating.sort_values(by='Z-Skoru', ascending=False)
+            else:
+                # Legacy format
+                df_cheating = df_cheating.rename(columns={
+                    'student1_id': 'Öğrenci 1',
+                    'student2_id': 'Öğrenci 2',
+                    'similarity_ratio': 'Harpp-Hogan İndeksi',
+                    'common_wrong_answers': 'Ortak Yanlış',
+                    'details': 'Detaylar'
+                })
+                # Remove unnecessary columns
+                cols_to_drop = ['student1_file', 'student2_file', 'pearson_correlation', 
+                               'student_a', 'student_b']
+                df_cheating = df_cheating.drop(columns=[c for c in cols_to_drop if c in df_cheating.columns], errors='ignore')
         else:
             df_cheating = pd.DataFrame({'Durum': ['Şüpheli kopya tespit edilmedi']})
 
@@ -584,20 +625,62 @@ def download_cheating_excel(session_id):
         )
         
         df = pd.DataFrame(result['results'])
-        df = df.rename(columns={
-            'student1_id': 'Öğrenci 1',
-            'student2_id': 'Öğrenci 2',
-            'similarity_ratio': 'Harpp-Hogan',
-            'pearson_correlation': 'Ağırlıklı Skor',
-            'common_wrong_answers': 'Ortak Yanlış',
-            'details': 'Detaylar'
-        })
         
-        # Remove file columns
-        df = df.drop(columns=['student1_file', 'student2_file'], errors='ignore')
+        # Check if we have new metrics
+        if 'gbt_z' in df.columns:
+            # Map new metrics to readable Turkish columns
+            # Ensure required columns exist
+            for col in ['k_index_ab', 'k_index_ba', 'wesolowsky', 'gbt_z', 'w_agreements']:
+                if col not in df.columns:
+                    df[col] = 0.0
+
+            # Rename to Turkish - use student_a/student_b as primary
+            df = df.rename(columns={
+                'student_a': 'Öğrenci 1',
+                'student_b': 'Öğrenci 2',
+                'gbt_z': 'Z-Skoru',
+                'k_index_ab': 'K-İndeks (1→2)',
+                'k_index_ba': 'K-İndeks (2→1)',
+                'wesolowsky': 'Wesolowsky Skoru',
+                'w_agreements': 'Ortak Yanlış',
+                'agreements': 'Ortak Cevap',
+                'score_a': 'Puan 1',
+                'score_b': 'Puan 2',
+                'wrongs_a': 'Yanlış 1',
+                'wrongs_b': 'Yanlış 2'
+            })
+            
+            # Select all available columns in order
+            cols = ['Öğrenci 1', 'Öğrenci 2', 'Puan 1', 'Puan 2', 
+                    'Z-Skoru', 'Ortak Yanlış', 'Ortak Cevap',
+                    'Yanlış 1', 'Yanlış 2', 'Wesolowsky Skoru',
+                    'K-İndeks (1→2)', 'K-İndeks (2→1)']
+            # Only use columns that exist
+            cols = [c for c in cols if c in df.columns]
+            df = df[cols]
+            
+            # Sort by Z-Score descending
+            if 'Z-Skoru' in df.columns:
+                df = df.sort_values(by='Z-Skoru', ascending=False)
+            
+        else:
+            # Fallback for old style
+            df = df.rename(columns={
+                'student1_id': 'Öğrenci 1',
+                'student2_id': 'Öğrenci 2',
+                'similarity_ratio': 'Harpp-Hogan İndeksi',
+                'common_wrong_answers': 'Ortak Yanlış',
+                'details': 'Detaylar'
+            })
+            
+            # Remove unnecessary columns
+            cols_to_drop = ['student1_file', 'student2_file', 'pearson_correlation', 
+                           'student_a', 'student_b']
+            df = df.drop(columns=[c for c in cols_to_drop if c in df.columns], errors='ignore')
         
         buf = io.BytesIO()
-        df.to_excel(buf, index=False, engine='openpyxl')
+        with pd.ExcelWriter(buf, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False)
         buf.seek(0)
         
         return send_file(

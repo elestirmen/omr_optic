@@ -378,9 +378,28 @@ async function calculateScores() {
 
         if (scoreData.success) {
             lastScoreResults = scoreData;
-            lastCheatingResults = cheatingData;
             displayScoreResults(scoreData);
-            displayAutoCheatingResults(cheatingData);
+
+            // Check for server-side advanced cheating report
+            if (scoreData.cheating_report_url) {
+                try {
+                    const advResponse = await fetch(scoreData.cheating_report_url);
+                    if (advResponse.ok) {
+                        const advData = await advResponse.json();
+                        displayAdvancedCheatingResults(advData);
+                    } else {
+                        // Fallback to basic
+                        lastCheatingResults = cheatingData;
+                        displayAutoCheatingResults(cheatingData);
+                    }
+                } catch (e) {
+                    console.error("Advanced report fetch failed", e);
+                    displayAutoCheatingResults(cheatingData);
+                }
+            } else {
+                lastCheatingResults = cheatingData;
+                displayAutoCheatingResults(cheatingData);
+            }
         } else {
             alert('Hata: ' + (scoreData.error || 'Bilinmeyen hata'));
         }
@@ -655,6 +674,86 @@ function displayAutoCheatingResults(data) {
     }
 }
 
+function displayAdvancedCheatingResults(data) {
+    const section = document.getElementById('auto-cheating-section');
+    const badge = document.getElementById('auto-cheating-badge');
+    const list = document.getElementById('auto-cheating-list');
+
+    section.style.display = 'block';
+
+    // Filter for suspicious pairs
+    // Criteria: K-Index < 0.01 OR GBT Z > 3.0 (matching backend thresholds)
+    // Let's sort by GBT Z-score descending
+    const pairs = data.pairs || [];
+
+    // Enrich with suspicion level (standardized with backend)
+    // Backend uses: Z > 3.0 OR K < 0.01 as "suspicious"
+    pairs.forEach(p => {
+        p.suspicionScore = 0;
+        // K-Index thresholds (lower = more suspicious)
+        if (p.k_index_ab < 0.01) p.suspicionScore += 3;
+        else if (p.k_index_ab < 0.05) p.suspicionScore += 1;
+
+        if (p.k_index_ba < 0.01) p.suspicionScore += 3;
+        else if (p.k_index_ba < 0.05) p.suspicionScore += 1;
+
+        // Z-Score thresholds (higher = more suspicious)
+        if (p.gbt_z > 4) p.suspicionScore += 3;
+        else if (p.gbt_z > 3) p.suspicionScore += 2;
+        else if (p.gbt_z > 2) p.suspicionScore += 1;
+    });
+
+    // Filter: suspicionScore >= 2 means at least moderate evidence
+    const suspicious = pairs.filter(p => p.suspicionScore >= 2);
+    suspicious.sort((a, b) => b.gbt_z - a.gbt_z);
+
+    if (suspicious.length > 0) {
+        badge.textContent = `${suspicious.length} şüpheli (Gelişmiş)`;
+        badge.style.background = 'rgba(239, 68, 68, 0.2)';
+        badge.style.color = 'var(--accent-danger)';
+
+        list.innerHTML = suspicious.slice(0, 15).map(r => {
+            // Determine direction
+            let direction = "↔";
+            let details = "";
+
+            // K-Index interpretation
+            if (r.k_index_ab < 0.01 && r.k_index_ba > 0.1) {
+                direction = "← (A kopyalamış)";
+                details += `K-Index(A): ${r.k_index_ab.toExponential(2)} `;
+            } else if (r.k_index_ba < 0.01 && r.k_index_ab > 0.1) {
+                direction = "→ (B kopyalamış)";
+                details += `K-Index(B): ${r.k_index_ba.toExponential(2)} `;
+            } else {
+                details += `K(A):${r.k_index_ab.toExponential(1)} K(B):${r.k_index_ba.toExponential(1)} `;
+            }
+
+            return `
+            <div class="cheat-item">
+                <div class="cheat-pair">
+                    <div class="cheat-student">${r.student_a}</div>
+                    <div class="cheat-vs">${direction}</div>
+                    <div class="cheat-student">${r.student_b}</div>
+                </div>
+                <div class="cheat-metrics">
+                    <span class="cheat-badge ${r.gbt_z > 3 ? 'danger' : ''}">Z-Skor: ${r.gbt_z.toFixed(2)}</span>
+                    <span class="cheat-badge">Ortak Yanlış: ${r.w_agreements}</span>
+                    <span class="cheat-badge" title="Wesolowsky">${(r.wesolowsky || r.wesolodsky || 0).toFixed(2)}</span>
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                    ${details}
+                </div>
+            </div>
+            `;
+        }).join('') + (suspicious.length > 15 ? `<p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">... ve ${suspicious.length - 15} daha</p>` : '');
+    } else {
+        badge.textContent = 'Temiz ✅ (Gelişmiş)';
+        badge.style.background = 'rgba(16, 185, 129, 0.2)';
+        badge.style.color = 'var(--accent-success)';
+        list.innerHTML = '<p style="color: var(--accent-success); font-size: 0.875rem;">Yüksek olasılıklı kopya tespit edilmedi.</p>';
+    }
+}
+
 async function detectCheating() {
     if (dataSource === 'csv' && csvData) {
         detectCheatingFromCsv();
@@ -830,20 +929,42 @@ function displayCheatingResults(data) {
         return;
     }
 
-    document.getElementById('results-list').innerHTML = data.results.map(r => `
+    document.getElementById('results-list').innerHTML = data.results.map(r => {
+        // Support both legacy (Harpp-Hogan) and new (GBT Z-Score) metrics
+        const hasAdvanced = r.gbt_z !== undefined;
+        const hasLegacy = r.similarity_ratio !== undefined && r.similarity_ratio <= 100;
+
+        let metricsHtml = '';
+        if (hasAdvanced) {
+            metricsHtml = `
+                <span class="cheat-badge ${r.gbt_z > 3 ? 'danger' : ''}">Z-Skor: ${r.gbt_z.toFixed(2)}</span>
+                <span class="cheat-badge">Ortak Yanlış: ${r.w_agreements || r.common_wrong_answers || 0}</span>
+            `;
+        } else if (hasLegacy) {
+            // Harpp-Hogan index display (not percentage)
+            metricsHtml = `
+                <span class="cheat-badge ${r.similarity_ratio >= 1.0 ? 'danger' : ''}">HH İndeks: ${r.similarity_ratio.toFixed(2)}</span>
+                <span class="cheat-badge">Ortak Yanlış: ${r.common_wrong_answers || 0}</span>
+            `;
+        }
+
+        const student1 = r.student1_id || r.student_a || 'Bilinmiyor';
+        const student2 = r.student2_id || r.student_b || 'Bilinmiyor';
+
+        return `
         <div class="cheat-item">
             <div class="cheat-pair">
-                <div class="cheat-student">${r.student1_id}</div>
+                <div class="cheat-student">${student1}</div>
                 <div class="cheat-vs">↔</div>
-                <div class="cheat-student">${r.student2_id}</div>
+                <div class="cheat-student">${student2}</div>
             </div>
             <div class="cheat-metrics">
-                <span class="cheat-badge ${r.similarity_ratio >= 0.85 ? 'danger' : ''}">Benzerlik: %${(r.similarity_ratio * 100).toFixed(1)}</span>
-                <span class="cheat-badge ${r.pearson_correlation >= 0.90 ? 'danger' : ''}">Pearson: ${r.pearson_correlation.toFixed(3)}</span>
-                <span class="cheat-badge">Ortak: ${r.common_wrong_answers}</span>
+                ${metricsHtml}
             </div>
+            ${r.details ? `<div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">${r.details}</div>` : ''}
         </div>
-    `).join('');
+        `;
+    }).join('');
 }
 
 async function downloadResults() {
@@ -908,10 +1029,30 @@ function downloadCombinedCsv() {
     // Add cheating section
     if (lastCheatingResults && lastCheatingResults.results.length > 0) {
         csv += '=== KOPYA TESPİT ===\n';
-        csv += 'Öğrenci 1;Öğrenci 2;Benzerlik;Ortak Cevap\n';
-        lastCheatingResults.results.forEach(r => {
-            csv += `${r.student1_id};${r.student2_id};%${(r.similarity_ratio * 100).toFixed(1).replace('.', ',')};${r.common_wrong_answers}\n`;
-        });
+        // Check if advanced (gbt_z) or legacy (similarity_ratio as Harpp-Hogan)
+        const hasAdvanced = lastCheatingResults.results[0].gbt_z !== undefined;
+
+        if (hasAdvanced) {
+            csv += 'Öğrenci 1;Öğrenci 2;Z-Skor;K-İndeks A;K-İndeks B;Ortak Yanlış\n';
+            lastCheatingResults.results.forEach(r => {
+                const student1 = r.student1_id || r.student_a || '';
+                const student2 = r.student2_id || r.student_b || '';
+                const zScore = (r.gbt_z || 0).toFixed(2).replace('.', ',');
+                const kA = (r.k_index_ab || 1).toExponential(2);
+                const kB = (r.k_index_ba || 1).toExponential(2);
+                const wrongs = r.w_agreements || r.common_wrong_answers || 0;
+                csv += `${student1};${student2};${zScore};${kA};${kB};${wrongs}\n`;
+            });
+        } else {
+            csv += 'Öğrenci 1;Öğrenci 2;HH İndeks;Ortak Yanlış\n';
+            lastCheatingResults.results.forEach(r => {
+                const student1 = r.student1_id || r.student_a || '';
+                const student2 = r.student2_id || r.student_b || '';
+                const hhIndex = (r.similarity_ratio || 0).toFixed(2).replace('.', ',');
+                const wrongs = r.common_wrong_answers || 0;
+                csv += `${student1};${student2};${hhIndex};${wrongs}\n`;
+            });
+        }
     } else {
         csv += '=== KOPYA TESPİT ===\n';
         csv += 'Şüpheli kopya tespit edilmedi\n';
