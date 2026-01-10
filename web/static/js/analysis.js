@@ -1,129 +1,122 @@
 /**
  * OMRChecker - Results/Analysis Module
- * Provides answer key management, scoring, and cheating detection
+ * Simple single-page layout with left settings, right results
  */
 
 // State
 let currentSessionId = null;
 let currentAnswerKey = {};
 let csvData = null;
-let dataSource = 'session'; // 'session' or 'csv'
+let dataSource = 'session';
 let lastScoreResults = null;
 let lastCheatingResults = null;
-let currentMode = 'score'; // 'score' or 'cheating'
-
-// DOM Elements
-const sessionSelect = document.getElementById('session-select');
-const questionCountInput = document.getElementById('question-count');
-const answerGrid = document.getElementById('answer-grid');
-const calculateBtn = document.getElementById('calculate-btn');
-const detectBtn = document.getElementById('detect-btn');
-const resultsContent = document.getElementById('results-content');
-const resultsEmpty = document.getElementById('results-empty');
-const savedKeysList = document.getElementById('saved-keys-list');
-const downloadExcelBtn = document.getElementById('download-excel-btn');
-const quickFillInput = document.getElementById('quick-fill-input');
-const applyQuickFillBtn = document.getElementById('apply-quick-fill-btn');
-const sessionCountInfo = document.getElementById('session-count-info');
+let currentMode = 'score';
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
-    setupDataSourceOptions();
-    setupModeTabs();
+    setupSourceToggle();
+    setupModeToggle();
     setupCsvUpload();
-    generateAnswerGrid(parseInt(questionCountInput.value));
+    generateAnswerGrid(parseInt(document.getElementById('question-count').value));
     loadSavedKeys();
     fetchServerSessions();
     checkUrlParams();
 
     // Event listeners
-    questionCountInput.addEventListener('change', () => {
-        generateAnswerGrid(parseInt(questionCountInput.value));
+    document.getElementById('question-count').addEventListener('change', (e) => {
+        generateAnswerGrid(parseInt(e.target.value));
     });
 
-    sessionSelect.addEventListener('change', () => {
-        currentSessionId = sessionSelect.value;
+    document.getElementById('session-select').addEventListener('change', (e) => {
+        currentSessionId = e.target.value;
         updateButtonStates();
     });
 
-    document.getElementById('refresh-sessions-btn')?.addEventListener('click', () => {
+    document.getElementById('refresh-sessions-btn').addEventListener('click', () => {
         fetchServerSessions(true);
     });
 
-    calculateBtn.addEventListener('click', calculateScores);
-    detectBtn.addEventListener('click', detectCheating);
-    downloadExcelBtn.addEventListener('click', downloadResults);
-
+    document.getElementById('calculate-btn').addEventListener('click', calculateScores);
+    document.getElementById('detect-btn').addEventListener('click', detectCheating);
+    document.getElementById('download-excel-btn').addEventListener('click', downloadResults);
     document.getElementById('save-key-btn').addEventListener('click', saveKey);
     document.getElementById('clear-key-btn').addEventListener('click', clearKey);
     
-    applyQuickFillBtn?.addEventListener('click', () => {
+    document.getElementById('apply-quick-fill-btn').addEventListener('click', () => {
         applyQuickFill();
-        setTimeout(updateButtonStates, 100);
+        updateButtonStates();
     });
 });
 
-function setupDataSourceOptions() {
-    const options = document.querySelectorAll('.data-option');
-    const sessionWrapper = document.getElementById('session-wrapper');
-    const csvWrapper = document.getElementById('csv-wrapper');
+function setupSourceToggle() {
+    const btnSession = document.getElementById('btn-session');
+    const btnCsv = document.getElementById('btn-csv');
+    const sourceSession = document.getElementById('source-session');
+    const sourceCsv = document.getElementById('source-csv');
 
-    options.forEach(option => {
-        option.addEventListener('click', () => {
-            options.forEach(o => o.classList.remove('active'));
-            option.classList.add('active');
-            
-            dataSource = option.dataset.source;
-            
-            if (dataSource === 'session') {
-                sessionWrapper.classList.add('show');
-                csvWrapper.classList.remove('show');
-            } else {
-                sessionWrapper.classList.remove('show');
-                csvWrapper.classList.add('show');
-            }
-            
-            updateButtonStates();
-        });
+    btnSession.addEventListener('click', () => {
+        btnSession.classList.add('active');
+        btnCsv.classList.remove('active');
+        sourceSession.classList.add('active');
+        sourceCsv.classList.remove('active');
+        dataSource = 'session';
+        updateButtonStates();
+    });
+
+    btnCsv.addEventListener('click', () => {
+        btnCsv.classList.add('active');
+        btnSession.classList.remove('active');
+        sourceCsv.classList.add('active');
+        sourceSession.classList.remove('active');
+        dataSource = 'csv';
+        updateButtonStates();
     });
 }
 
-function setupModeTabs() {
-    const tabs = document.querySelectorAll('.mode-tab');
-    const contents = document.querySelectorAll('.mode-content');
+function setupModeToggle() {
+    const btnScore = document.getElementById('btn-mode-score');
+    const btnCheating = document.getElementById('btn-mode-cheating');
+    const modeScore = document.getElementById('mode-score');
+    const modeCheating = document.getElementById('mode-cheating');
 
-    tabs.forEach(tab => {
-        tab.addEventListener('click', () => {
-            tabs.forEach(t => t.classList.remove('active'));
-            contents.forEach(c => c.classList.remove('active'));
+    btnScore.addEventListener('click', () => {
+        btnScore.classList.add('active');
+        btnCheating.classList.remove('active');
+        modeScore.classList.add('active');
+        modeCheating.classList.remove('active');
+        currentMode = 'score';
+        updateButtonStates();
+    });
 
-            tab.classList.add('active');
-            currentMode = tab.dataset.mode;
-            document.getElementById(`${currentMode}-mode`).classList.add('active');
-        });
+    btnCheating.addEventListener('click', () => {
+        btnCheating.classList.add('active');
+        btnScore.classList.remove('active');
+        modeCheating.classList.add('active');
+        modeScore.classList.remove('active');
+        currentMode = 'cheating';
+        updateButtonStates();
     });
 }
 
 function setupCsvUpload() {
     const dropzone = document.getElementById('csv-dropzone');
     const fileInput = document.getElementById('csv-file-input');
-    const fileLoaded = document.getElementById('csv-file-loaded');
     const removeBtn = document.getElementById('remove-csv-btn');
 
     dropzone.addEventListener('click', () => fileInput.click());
 
     dropzone.addEventListener('dragover', (e) => {
         e.preventDefault();
-        dropzone.classList.add('dragover');
+        dropzone.style.borderColor = 'var(--accent-primary)';
     });
 
     dropzone.addEventListener('dragleave', () => {
-        dropzone.classList.remove('dragover');
+        dropzone.style.borderColor = 'var(--border-color)';
     });
 
     dropzone.addEventListener('drop', (e) => {
         e.preventDefault();
-        dropzone.classList.remove('dragover');
+        dropzone.style.borderColor = 'var(--border-color)';
         const file = e.dataTransfer.files[0];
         if (file && file.name.endsWith('.csv')) {
             handleCsvFile(file);
@@ -167,22 +160,17 @@ function parseCsvData(text, fileName) {
     }
 
     const questionCols = headers.filter(h => /^[qQ]\d+$/.test(h));
-    questionCols.sort((a, b) => {
-        const numA = parseInt(a.match(/\d+/)[0]);
-        const numB = parseInt(b.match(/\d+/)[0]);
-        return numA - numB;
-    });
+    questionCols.sort((a, b) => parseInt(a.match(/\d+/)[0]) - parseInt(b.match(/\d+/)[0]));
 
     csvData = { fileName, headers, rows, questionCols };
 
-    // Update UI
     document.getElementById('csv-file-name').textContent = fileName;
     document.getElementById('csv-file-stats').textContent = `${rows.length} satır, ${questionCols.length} soru`;
     document.getElementById('csv-file-loaded').classList.add('show');
     document.getElementById('csv-dropzone').style.display = 'none';
 
     if (questionCols.length > 0) {
-        questionCountInput.value = questionCols.length;
+        document.getElementById('question-count').value = questionCols.length;
         generateAnswerGrid(questionCols.length);
     }
 
@@ -218,6 +206,9 @@ function removeCsvData() {
 }
 
 async function fetchServerSessions(showLoading = false) {
+    const sessionSelect = document.getElementById('session-select');
+    const sessionInfo = document.getElementById('session-info');
+    
     if (showLoading) {
         sessionSelect.innerHTML = '<option value="">Yükleniyor...</option>';
     }
@@ -233,30 +224,28 @@ async function fetchServerSessions(showLoading = false) {
                 const option = document.createElement('option');
                 option.value = session.id;
                 const date = new Date(session.modified).toLocaleDateString('tr-TR', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
                 });
                 option.textContent = `${session.id.substring(0, 8)}... - ${date}`;
                 sessionSelect.appendChild(option);
             });
-            
-            sessionCountInfo.textContent = `${data.sessions.length} oturum bulundu`;
+            sessionInfo.textContent = `✅ ${data.sessions.length} oturum`;
+            sessionInfo.style.color = 'var(--accent-success)';
         } else {
-            sessionCountInfo.textContent = 'Henüz oturum yok. Önce OMR işleme yapın.';
+            sessionInfo.textContent = '⚠️ Oturum yok';
+            sessionInfo.style.color = 'var(--accent-warning)';
         }
         
-        // Also load from localStorage
         loadRecentSessions();
     } catch (error) {
-        console.error('Failed to fetch sessions:', error);
-        sessionCountInfo.textContent = 'Oturumlar yüklenemedi';
+        sessionInfo.textContent = '❌ Yüklenemedi';
+        sessionInfo.style.color = 'var(--accent-danger)';
     }
 }
 
 function loadRecentSessions() {
+    const sessionSelect = document.getElementById('session-select');
     const recent = JSON.parse(localStorage.getItem('omr_recent_sessions') || localStorage.getItem('recentSessions') || '[]');
     recent.forEach(session => {
         const exists = Array.from(sessionSelect.options).some(opt => opt.value === session.id);
@@ -273,13 +262,8 @@ function checkUrlParams() {
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get('session');
     if (sessionId) {
-        let exists = false;
-        for (let option of sessionSelect.options) {
-            if (option.value === sessionId) {
-                exists = true;
-                break;
-            }
-        }
+        const sessionSelect = document.getElementById('session-select');
+        let exists = Array.from(sessionSelect.options).some(opt => opt.value === sessionId);
         if (!exists) {
             const option = document.createElement('option');
             option.value = sessionId;
@@ -293,6 +277,7 @@ function checkUrlParams() {
 }
 
 function generateAnswerGrid(count) {
+    const answerGrid = document.getElementById('answer-grid');
     answerGrid.innerHTML = '';
     currentAnswerKey = {};
 
@@ -325,8 +310,8 @@ function generateAnswerGrid(count) {
 }
 
 function applyQuickFill() {
-    const input = quickFillInput.value.toUpperCase().replace(/[^A-E]/g, '');
-    const selects = answerGrid.querySelectorAll('select');
+    const input = document.getElementById('quick-fill-input').value.toUpperCase().replace(/[^A-E]/g, '');
+    const selects = document.getElementById('answer-grid').querySelectorAll('select');
 
     currentAnswerKey = {};
     selects.forEach((select, idx) => {
@@ -335,14 +320,15 @@ function applyQuickFill() {
             currentAnswerKey[idx + 1] = input[idx];
         }
     });
+    document.getElementById('quick-fill-input').value = '';
 }
 
 function updateButtonStates() {
     const hasData = (dataSource === 'csv' && csvData) || (dataSource === 'session' && currentSessionId);
     const hasAnswers = Object.keys(currentAnswerKey).length > 0;
 
-    calculateBtn.disabled = !(hasData && hasAnswers);
-    detectBtn.disabled = !hasData;
+    document.getElementById('calculate-btn').disabled = !(hasData && hasAnswers);
+    document.getElementById('detect-btn').disabled = !hasData;
 }
 
 async function calculateScores() {
@@ -356,8 +342,9 @@ async function calculateScores() {
         return;
     }
 
-    calculateBtn.disabled = true;
-    calculateBtn.textContent = 'Hesaplanıyor...';
+    const btn = document.getElementById('calculate-btn');
+    btn.disabled = true;
+    btn.textContent = 'Hesaplanıyor...';
 
     try {
         const response = await fetch(`/api/analysis/score/${currentSessionId}`, {
@@ -383,8 +370,8 @@ async function calculateScores() {
     } catch (error) {
         alert('Bağlantı hatası: ' + error.message);
     } finally {
-        calculateBtn.disabled = false;
-        calculateBtn.textContent = 'Puanları Hesapla';
+        btn.disabled = false;
+        btn.textContent = 'Puanları Hesapla';
     }
 }
 
@@ -431,25 +418,19 @@ function calculateScoresFromCsv() {
 
         const score = (correct * correctPts) + (wrong * wrongPts) + (empty * emptyPts);
 
-        let fileName = row['file_name'] || row['filename'] || row['file_id'] || '';
-        let studentId = row['Ogrenci_No'] || row['ogrenci_no'] || row['OgrenciNo'] || 
-                        row['student_id'] || row['id'] || '';
-        let tcKimlik = row['TC_Kimlik'] || row['tc_kimlik'] || row['TCKimlik'] || row['tc'] || '';
-        let studentName = row['ad'] || row['Ad'] || row['AD'] || row['name'] || row['adsoyad'] || '';
+        let studentId = row['Ogrenci_No'] || row['ogrenci_no'] || row['student_id'] || '';
+        let tcKimlik = row['TC_Kimlik'] || row['tc_kimlik'] || '';
+        let studentName = row['ad'] || row['Ad'] || row['name'] || '';
+        let fileName = row['file_name'] || row['file_id'] || '';
 
         if (!studentId && fileName) {
-            const cleanFileName = fileName.split(/[\/\\]/).pop() || fileName;
-            const nameWithoutExt = cleanFileName.replace(/\.[^.]+$/, '');
-            const numbers = nameWithoutExt.match(/\d{6,}/);
-            studentId = numbers ? numbers[0] : nameWithoutExt;
+            const clean = fileName.split(/[\/\\]/).pop().replace(/\.[^.]+$/, '');
+            const nums = clean.match(/\d{6,}/);
+            studentId = nums ? nums[0] : clean;
         }
-
-        if (!studentId) {
-            studentId = `Satır ${idx + 1}`;
-        }
+        if (!studentId) studentId = `Satır ${idx + 1}`;
 
         results.push({
-            file_name: fileName,
             student_id: studentId,
             student_name: studentName,
             tc_kimlik: tcKimlik,
@@ -461,21 +442,17 @@ function calculateScoresFromCsv() {
         });
     });
 
-    results.sort((a, b) => b.score - a.score || a.student_id.localeCompare(b.student_id));
+    results.sort((a, b) => b.score - a.score);
 
     const data = {
         success: true,
-        session_id: 'csv_upload',
         total_students: results.length,
         total_questions: questionCols.length,
         results: results,
         statistics: {
             average_score: results.reduce((s, r) => s + r.score, 0) / results.length,
             max_score: Math.max(...results.map(r => r.score)),
-            min_score: Math.min(...results.map(r => r.score)),
-            total_correct: results.reduce((s, r) => s + r.correct_count, 0),
-            total_wrong: results.reduce((s, r) => s + r.wrong_count, 0),
-            total_empty: results.reduce((s, r) => s + r.empty_count, 0)
+            min_score: Math.min(...results.map(r => r.score))
         }
     };
 
@@ -484,51 +461,42 @@ function calculateScoresFromCsv() {
 }
 
 function displayScoreResults(data) {
-    document.getElementById('results-title').textContent = 'Puan Sonuçları';
-    resultsEmpty.style.display = 'none';
-    resultsContent.style.display = 'block';
-
-    const statsContainer = document.getElementById('results-stats');
-    const resultsList = document.getElementById('results-list');
+    document.getElementById('results-title').textContent = '📊 Puan Sonuçları';
+    document.getElementById('results-empty').style.display = 'none';
+    document.getElementById('results-content').style.display = 'block';
+    document.getElementById('download-excel-btn').style.display = 'block';
 
     const stats = data.statistics;
-    statsContainer.innerHTML = `
-        <div class="stat-box">
+    document.getElementById('results-stats').innerHTML = `
+        <div class="stat-card">
             <div class="stat-value">${data.total_students}</div>
             <div class="stat-label">Öğrenci</div>
         </div>
-        <div class="stat-box">
+        <div class="stat-card">
             <div class="stat-value">${stats.average_score?.toFixed(1) || 0}</div>
             <div class="stat-label">Ortalama</div>
         </div>
-        <div class="stat-box">
+        <div class="stat-card">
             <div class="stat-value">${stats.max_score?.toFixed(1) || 0}</div>
             <div class="stat-label">En Yüksek</div>
         </div>
-        <div class="stat-box">
+        <div class="stat-card">
             <div class="stat-value">${stats.min_score?.toFixed(1) || 0}</div>
             <div class="stat-label">En Düşük</div>
         </div>
     `;
 
-    resultsList.innerHTML = data.results.map((r, i) => {
-        const displayName = r.student_name || '';
-        const displayId = r.student_id || '';
-        const displayTc = r.tc_kimlik || '';
-
-        let details = [];
-        if (displayName) details.push(displayName);
-        if (displayTc) details.push(`TC: ${displayTc}`);
-
+    document.getElementById('results-list').innerHTML = data.results.map((r, i) => {
+        const details = [r.student_name, r.tc_kimlik ? `TC: ${r.tc_kimlik}` : ''].filter(Boolean).join(' • ');
         return `
-            <div class="score-result">
-                <div class="rank ${i < 3 ? 'top3' : ''}">${i + 1}</div>
-                <div class="student-info">
-                    <div class="student-id">${displayId}</div>
-                    <div class="student-details">${details.join(' • ')}</div>
+            <div class="result-item">
+                <div class="rank ${i < 3 ? 'top' : ''}">${i + 1}</div>
+                <div class="result-info">
+                    <div class="result-id">${r.student_id}</div>
+                    <div class="result-detail">${details}</div>
                 </div>
-                <div class="score-info">
-                    <div class="score-value">${r.score.toFixed(1)}</div>
+                <div class="result-score">
+                    <div class="score-num">${r.score.toFixed(1)}</div>
                     <div class="score-breakdown">D:${r.correct_count} Y:${r.wrong_count} B:${r.empty_count}</div>
                 </div>
             </div>
@@ -547,8 +515,9 @@ async function detectCheating() {
         return;
     }
 
-    detectBtn.disabled = true;
-    detectBtn.textContent = 'Analiz ediliyor...';
+    const btn = document.getElementById('detect-btn');
+    btn.disabled = true;
+    btn.textContent = 'Analiz ediliyor...';
 
     try {
         const response = await fetch(`/api/analysis/cheating/${currentSessionId}`, {
@@ -571,8 +540,8 @@ async function detectCheating() {
     } catch (error) {
         alert('Bağlantı hatası: ' + error.message);
     } finally {
-        detectBtn.disabled = false;
-        detectBtn.textContent = 'Kopya Tespit Et';
+        btn.disabled = false;
+        btn.textContent = 'Kopya Tespit Et';
     }
 }
 
@@ -588,66 +557,47 @@ function detectCheatingFromCsv() {
     const students = csvData.rows.map((row, idx) => {
         const answers = questionCols.map(qCol => {
             const ans = (row[qCol] || '').trim().toUpperCase();
-            if (!ans || ans === '*' || ans === '-') return '';
-            return ans;
+            return (!ans || ans === '*' || ans === '-') ? '' : ans;
         });
 
-        let fileName = row['file_name'] || row['filename'] || row['file_id'] || '';
-        let studentId = row['Ogrenci_No'] || row['ogrenci_no'] || row['OgrenciNo'] || 
-                        row['student_id'] || row['id'] || '';
-        let studentName = row['ad'] || row['Ad'] || row['AD'] || row['name'] || '';
-
-        if (!studentId && fileName) {
-            const cleanFileName = fileName.split(/[\/\\]/).pop() || fileName;
-            const nameWithoutExt = cleanFileName.replace(/\.[^.]+$/, '');
-            const numbers = nameWithoutExt.match(/\d{6,}/);
-            studentId = numbers ? numbers[0] : nameWithoutExt;
-        }
+        let studentId = row['Ogrenci_No'] || row['ogrenci_no'] || row['student_id'] || '';
+        let studentName = row['ad'] || row['Ad'] || '';
 
         if (!studentId) {
-            studentId = `Satır ${idx + 1}`;
+            const fileName = row['file_name'] || row['file_id'] || '';
+            if (fileName) {
+                const clean = fileName.split(/[\/\\]/).pop().replace(/\.[^.]+$/, '');
+                const nums = clean.match(/\d{6,}/);
+                studentId = nums ? nums[0] : clean;
+            }
         }
+        if (!studentId) studentId = `Satır ${idx + 1}`;
 
         const displayId = studentName ? `${studentId} (${studentName})` : studentId;
-
-        return { studentId: displayId, fileName, answers };
+        return { studentId: displayId, answers };
     });
 
     const cheatingPairs = [];
 
     for (let i = 0; i < students.length; i++) {
         for (let j = i + 1; j < students.length; j++) {
-            const s1 = students[i];
-            const s2 = students[j];
+            const s1 = students[i], s2 = students[j];
 
-            let similar = 0;
-            let total = Math.max(s1.answers.length, s2.answers.length);
+            let similar = 0, total = Math.max(s1.answers.length, s2.answers.length);
             for (let k = 0; k < Math.min(s1.answers.length, s2.answers.length); k++) {
-                if (s1.answers[k] === s2.answers[k] && s1.answers[k] !== '') {
-                    similar++;
-                }
+                if (s1.answers[k] === s2.answers[k] && s1.answers[k] !== '') similar++;
             }
             const simRatio = total > 0 ? similar / total : 0;
-            const pearson = simRatio;
-            const commonWrong = similar;
 
-            const isSuspicious = (simRatio >= simThreshold && pearson >= pearsonThreshold) || 
-                                 commonWrong >= minCommonWrong;
+            const isSuspicious = (simRatio >= simThreshold && simRatio >= pearsonThreshold) || similar >= minCommonWrong;
 
             if (isSuspicious) {
-                const details = [];
-                if (simRatio >= simThreshold) details.push(`Benzerlik: %${(simRatio * 100).toFixed(1)}`);
-                if (commonWrong >= minCommonWrong) details.push(`Ortak: ${commonWrong}`);
-
                 cheatingPairs.push({
                     student1_id: s1.studentId,
-                    student1_file: s1.fileName,
                     student2_id: s2.studentId,
-                    student2_file: s2.fileName,
                     similarity_ratio: simRatio,
-                    pearson_correlation: pearson,
-                    common_wrong_answers: commonWrong,
-                    details: details.join(' | ')
+                    pearson_correlation: simRatio,
+                    common_wrong_answers: similar
                 });
             }
         }
@@ -657,7 +607,6 @@ function detectCheatingFromCsv() {
 
     const data = {
         success: true,
-        session_id: 'csv_upload',
         total_students: students.length,
         total_pairs_checked: students.length * (students.length - 1) / 2,
         suspicious_pairs: cheatingPairs.length,
@@ -669,62 +618,52 @@ function detectCheatingFromCsv() {
 }
 
 function displayCheatingResults(data) {
-    document.getElementById('results-title').textContent = 'Kopya Tespit Sonuçları';
-    resultsEmpty.style.display = 'none';
-    resultsContent.style.display = 'block';
+    document.getElementById('results-title').textContent = '🔍 Kopya Tespit Sonuçları';
+    document.getElementById('results-empty').style.display = 'none';
+    document.getElementById('results-content').style.display = 'block';
+    document.getElementById('download-excel-btn').style.display = 'block';
 
-    const statsContainer = document.getElementById('results-stats');
-    const resultsList = document.getElementById('results-list');
-
-    statsContainer.innerHTML = `
-        <div class="stat-box">
+    document.getElementById('results-stats').innerHTML = `
+        <div class="stat-card">
             <div class="stat-value">${data.total_students}</div>
             <div class="stat-label">Öğrenci</div>
         </div>
-        <div class="stat-box">
+        <div class="stat-card">
             <div class="stat-value">${data.total_pairs_checked}</div>
             <div class="stat-label">Karşılaştırma</div>
         </div>
-        <div class="stat-box">
-            <div class="stat-value" style="color: ${data.suspicious_pairs > 0 ? 'var(--danger)' : 'var(--success)'}">
-                ${data.suspicious_pairs}
-            </div>
+        <div class="stat-card">
+            <div class="stat-value" style="color: ${data.suspicious_pairs > 0 ? 'var(--accent-danger)' : 'var(--accent-success)'}">${data.suspicious_pairs}</div>
             <div class="stat-label">Şüpheli</div>
         </div>
-        <div class="stat-box">
+        <div class="stat-card">
             <div class="stat-value">${data.suspicious_pairs > 0 ? '⚠️' : '✅'}</div>
             <div class="stat-label">Durum</div>
         </div>
     `;
 
     if (data.results.length === 0) {
-        resultsList.innerHTML = `
-            <div style="text-align: center; padding: 60px 20px; color: var(--success);">
-                <div style="font-size: 64px; margin-bottom: 15px;">✅</div>
-                <h3 style="margin: 0 0 8px;">Temiz!</h3>
-                <p style="margin: 0; color: var(--text-muted);">Şüpheli kopya tespit edilmedi</p>
+        document.getElementById('results-list').innerHTML = `
+            <div style="text-align: center; padding: 3rem; color: var(--accent-success);">
+                <div style="font-size: 4rem;">✅</div>
+                <h3 style="margin: 1rem 0 0.5rem;">Temiz!</h3>
+                <p style="color: var(--text-secondary);">Şüpheli kopya tespit edilmedi</p>
             </div>
         `;
         return;
     }
 
-    resultsList.innerHTML = data.results.map(r => `
-        <div class="cheating-result">
-            <div class="cheating-pair">
-                <div class="cheating-student">${r.student1_id}</div>
-                <div class="cheating-vs">↔</div>
-                <div class="cheating-student">${r.student2_id}</div>
+    document.getElementById('results-list').innerHTML = data.results.map(r => `
+        <div class="cheat-item">
+            <div class="cheat-pair">
+                <div class="cheat-student">${r.student1_id}</div>
+                <div class="cheat-vs">↔</div>
+                <div class="cheat-student">${r.student2_id}</div>
             </div>
-            <div class="cheating-metrics">
-                <span class="cheating-metric ${r.similarity_ratio >= 0.85 ? 'danger' : ''}">
-                    Benzerlik: %${(r.similarity_ratio * 100).toFixed(1)}
-                </span>
-                <span class="cheating-metric ${r.pearson_correlation >= 0.90 ? 'danger' : ''}">
-                    Pearson: ${r.pearson_correlation.toFixed(3)}
-                </span>
-                <span class="cheating-metric">
-                    Ortak: ${r.common_wrong_answers}
-                </span>
+            <div class="cheat-metrics">
+                <span class="cheat-badge ${r.similarity_ratio >= 0.85 ? 'danger' : ''}">Benzerlik: %${(r.similarity_ratio * 100).toFixed(1)}</span>
+                <span class="cheat-badge ${r.pearson_correlation >= 0.90 ? 'danger' : ''}">Pearson: ${r.pearson_correlation.toFixed(3)}</span>
+                <span class="cheat-badge">Ortak: ${r.common_wrong_answers}</span>
             </div>
         </div>
     `).join('');
@@ -734,7 +673,7 @@ async function downloadResults() {
     if (dataSource === 'csv' && csvData) {
         if (currentMode === 'score' && lastScoreResults) {
             downloadResultsAsCsv(lastScoreResults.results, 'puanlar');
-        } else if (currentMode === 'cheating' && lastCheatingResults) {
+        } else if (lastCheatingResults) {
             downloadResultsAsCsv(lastCheatingResults.results, 'kopya_tespit');
         }
         return;
@@ -785,64 +724,45 @@ async function downloadResults() {
 function downloadResultsAsCsv(results, prefix) {
     if (!results || results.length === 0) return;
 
-    const orderedKeys = [
-        'student_id', 'student_name', 'tc_kimlik',
-        'correct_count', 'wrong_count', 'empty_count', 'score', 'answers',
-        'student1_id', 'student2_id', 'similarity_ratio', 'pearson_correlation', 'common_wrong_answers', 'details'
-    ];
-
-    const existingKeys = Object.keys(results[0]);
-    const headers = orderedKeys.filter(k => existingKeys.includes(k))
-        .concat(existingKeys.filter(k => !orderedKeys.includes(k) && k !== 'file_name' && k !== 'student1_file' && k !== 'student2_file'));
-
     const headerMap = {
-        'file_name': 'Dosya',
         'student_id': 'Öğrenci No',
         'student_name': 'Ad Soyad',
         'tc_kimlik': 'TC Kimlik',
-        'answers': 'Cevaplar',
         'correct_count': 'Doğru',
         'wrong_count': 'Yanlış',
         'empty_count': 'Boş',
         'score': 'Puan',
+        'answers': 'Cevaplar',
         'student1_id': 'Öğrenci 1',
         'student2_id': 'Öğrenci 2',
-        'similarity_ratio': 'Benzerlik Oranı',
-        'pearson_correlation': 'Pearson Korelasyonu',
-        'common_wrong_answers': 'Ortak Cevaplar',
-        'details': 'Detaylar'
+        'similarity_ratio': 'Benzerlik',
+        'pearson_correlation': 'Pearson',
+        'common_wrong_answers': 'Ortak'
     };
 
-    const csvHeaders = headers.map(h => headerMap[h] || h);
+    const keys = Object.keys(results[0]).filter(k => headerMap[k]);
+    const csvHeaders = keys.map(k => headerMap[k]);
 
-    let csvContent = '\uFEFF';
-    csvContent += csvHeaders.join(';') + '\n';
-
+    let csv = '\uFEFF' + csvHeaders.join(';') + '\n';
     results.forEach(row => {
-        const values = headers.map(h => {
-            let val = row[h];
-            if (typeof val === 'number') {
-                val = val.toString().replace('.', ',');
-            }
-            if (typeof val === 'string' && (val.includes(';') || val.includes('"') || val.includes('\n'))) {
-                val = '"' + val.replace(/"/g, '""') + '"';
-            }
+        const values = keys.map(k => {
+            let val = row[k];
+            if (typeof val === 'number') val = val.toString().replace('.', ',');
+            if (typeof val === 'string' && val.includes(';')) val = `"${val}"`;
             return val || '';
         });
-        csvContent += values.join(';') + '\n';
+        csv += values.join(';') + '\n';
     });
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const a = document.createElement('a');
-    a.href = url;
+    a.href = window.URL.createObjectURL(blob);
     a.download = `${prefix}_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
-    window.URL.revokeObjectURL(url);
 }
 
 async function saveKey() {
-    const name = prompt('Anahtar adı girin:');
+    const name = prompt('Anahtar adı:');
     if (!name) return;
 
     try {
@@ -850,29 +770,24 @@ async function saveKey() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                name: name,
+                name,
                 answers: currentAnswerKey,
-                question_count: parseInt(questionCountInput.value),
+                question_count: parseInt(document.getElementById('question-count').value),
                 correct_points: parseFloat(document.getElementById('correct-points').value),
                 wrong_points: parseFloat(document.getElementById('wrong-points').value),
                 empty_points: parseFloat(document.getElementById('empty-points').value)
             })
         });
-
-        const data = await response.json();
-        if (data.success) {
-            loadSavedKeys();
-        }
-    } catch (error) {
-        alert('Kaydetme hatası: ' + error.message);
+        if ((await response.json()).success) loadSavedKeys();
+    } catch (e) {
+        alert('Kaydetme hatası');
     }
 }
 
 function clearKey() {
     currentAnswerKey = {};
-    const selects = answerGrid.querySelectorAll('select');
-    selects.forEach(s => s.value = '');
-    quickFillInput.value = '';
+    document.getElementById('answer-grid').querySelectorAll('select').forEach(s => s.value = '');
+    document.getElementById('quick-fill-input').value = '';
     updateButtonStates();
 }
 
@@ -881,22 +796,21 @@ async function loadSavedKeys() {
         const response = await fetch('/api/analysis/answer-keys');
         const data = await response.json();
 
+        const list = document.getElementById('saved-keys-list');
         if (data.keys && data.keys.length > 0) {
-            savedKeysList.innerHTML = data.keys.map(key => `
-                <div class="saved-key-item">
-                    <span class="saved-key-name">${key.name} (${key.question_count})</span>
-                    <div class="saved-key-actions">
-                        <button class="btn btn-outline btn-sm" onclick="loadKey('${key.name}')">Yükle</button>
-                        <button class="btn btn-outline btn-sm" onclick="deleteKey('${key.name}')" style="color: var(--danger);">✕</button>
+            list.innerHTML = data.keys.map(key => `
+                <div class="saved-key">
+                    <span>${key.name} (${key.question_count})</span>
+                    <div>
+                        <button class="btn-sm" onclick="loadKey('${key.name}')">Yükle</button>
+                        <button class="btn-sm" onclick="deleteKey('${key.name}')" style="color: var(--accent-danger);">✕</button>
                     </div>
                 </div>
             `).join('');
         } else {
-            savedKeysList.innerHTML = '<p style="color: var(--text-muted); font-size: 12px; text-align: center;">Kayıtlı anahtar yok</p>';
+            list.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.8125rem;">Kayıtlı anahtar yok</div>';
         }
-    } catch (error) {
-        console.error('Failed to load keys:', error);
-    }
+    } catch (e) {}
 }
 
 async function loadKey(name) {
@@ -905,12 +819,12 @@ async function loadKey(name) {
         const data = await response.json();
 
         if (data) {
-            questionCountInput.value = data.question_count;
+            document.getElementById('question-count').value = data.question_count;
             generateAnswerGrid(data.question_count);
 
             currentAnswerKey = data.answers;
             Object.entries(data.answers).forEach(([q, ans]) => {
-                const select = answerGrid.querySelector(`select[data-question="${q}"]`);
+                const select = document.getElementById('answer-grid').querySelector(`select[data-question="${q}"]`);
                 if (select) select.value = ans;
             });
 
@@ -919,21 +833,17 @@ async function loadKey(name) {
                 document.getElementById('wrong-points').value = data.scoring.wrong_points;
                 document.getElementById('empty-points').value = data.scoring.empty_points;
             }
-
             updateButtonStates();
         }
-    } catch (error) {
-        alert('Yükleme hatası: ' + error.message);
+    } catch (e) {
+        alert('Yükleme hatası');
     }
 }
 
 async function deleteKey(name) {
-    if (!confirm(`"${name}" anahtarını silmek istiyor musunuz?`)) return;
-
+    if (!confirm(`"${name}" silinsin mi?`)) return;
     try {
         await fetch(`/api/analysis/answer-keys/${name}`, { method: 'DELETE' });
         loadSavedKeys();
-    } catch (error) {
-        alert('Silme hatası: ' + error.message);
-    }
+    } catch (e) {}
 }
