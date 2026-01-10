@@ -504,13 +504,19 @@ def download_scores_excel(session_id):
 def detect_cheating(session_id):
     """Detect potential cheating"""
     data = request.get_json() or {}
-    
+
+    # Convert answer_key keys to int if provided
+    answer_key = data.get('answer_key')
+    if answer_key:
+        answer_key = {int(k): v for k, v in answer_key.items()}
+
     try:
         result = analysis_service.detect_cheating(
             session_id=session_id,
             similarity_threshold=data.get('similarity_threshold', 0.85),
             pearson_threshold=data.get('pearson_threshold', 0.90),
-            min_common_wrong=data.get('min_common_wrong', 3)
+            min_common_wrong=data.get('min_common_wrong', 5),
+            answer_key=answer_key
         )
         return jsonify(result)
     except FileNotFoundError as e:

@@ -363,14 +363,15 @@ async function calculateScores() {
 
         const scoreData = await scoreResponse.json();
         
-        // Also run cheating detection automatically
+        // Also run cheating detection automatically with answer key
         const cheatingResponse = await fetch(`/api/analysis/cheating/${currentSessionId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 similarity_threshold: parseFloat(document.getElementById('similarity-threshold').value),
                 pearson_threshold: parseFloat(document.getElementById('pearson-threshold').value),
-                min_common_wrong: parseInt(document.getElementById('common-wrong-threshold').value)
+                min_common_wrong: parseInt(document.getElementById('common-wrong-threshold').value),
+                answer_key: currentAnswerKey  // Include answer key for better detection
             })
         });
         
@@ -483,10 +484,7 @@ function calculateScoresFromCsv() {
 function runAutoCheatingFromCsv() {
     if (!csvData) return;
 
-    const simThreshold = parseFloat(document.getElementById('similarity-threshold').value);
-    const pearsonThreshold = parseFloat(document.getElementById('pearson-threshold').value);
     const minCommonWrong = parseInt(document.getElementById('common-wrong-threshold').value);
-
     const questionCols = csvData.questionCols;
 
     const students = csvData.rows.map((row, idx) => {
@@ -512,27 +510,37 @@ function runAutoCheatingFromCsv() {
         return { studentId: displayId, answers };
     });
 
+    // Calculate answer frequencies for rare answer detection
+    const answerFreq = calculateAnswerFrequencies(students, questionCols.length);
+
     const cheatingPairs = [];
 
     for (let i = 0; i < students.length; i++) {
         for (let j = i + 1; j < students.length; j++) {
             const s1 = students[i], s2 = students[j];
+            const metrics = calculateCheatingMetrics(s1.answers, s2.answers, currentAnswerKey, answerFreq);
+            const suspicionScore = calculateSuspicionScore(metrics, Object.keys(currentAnswerKey).length > 0);
 
-            let similar = 0, total = Math.max(s1.answers.length, s2.answers.length);
-            for (let k = 0; k < Math.min(s1.answers.length, s2.answers.length); k++) {
-                if (s1.answers[k] === s2.answers[k] && s1.answers[k] !== '') similar++;
-            }
-            const simRatio = total > 0 ? similar / total : 0;
-
-            const isSuspicious = (simRatio >= simThreshold && simRatio >= pearsonThreshold) || similar >= minCommonWrong;
+            const isSuspicious = (
+                suspicionScore >= 0.7 ||
+                (metrics.commonWrong >= minCommonWrong && Object.keys(currentAnswerKey).length > 0) ||
+                (metrics.rareMatchRatio >= 0.5 && metrics.rareMatches >= 3) ||
+                (metrics.patternSimilarity >= 0.85 && metrics.blankMatchRatio >= 0.8)
+            );
 
             if (isSuspicious) {
+                const details = [];
+                if (metrics.commonWrong >= 2) details.push(`Ortak yanlış: ${metrics.commonWrong}`);
+                if (metrics.rareMatches >= 2) details.push(`Nadir cevap: ${metrics.rareMatches}`);
+                if (metrics.patternSimilarity >= 0.8) details.push(`Desen: %${(metrics.patternSimilarity*100).toFixed(0)}`);
+
                 cheatingPairs.push({
                     student1_id: s1.studentId,
                     student2_id: s2.studentId,
-                    similarity_ratio: simRatio,
-                    pearson_correlation: simRatio,
-                    common_wrong_answers: similar
+                    similarity_ratio: suspicionScore,
+                    pearson_correlation: metrics.patternSimilarity,
+                    common_wrong_answers: metrics.commonWrong || metrics.rareMatches,
+                    details: details.join(' | ')
                 });
             }
         }
@@ -550,6 +558,87 @@ function runAutoCheatingFromCsv() {
 
     lastCheatingResults = cheatingData;
     displayAutoCheatingResults(cheatingData);
+}
+
+function calculateAnswerFrequencies(students, numQuestions) {
+    const freq = Array.from({ length: numQuestions }, () => ({}));
+    const total = students.length;
+
+    students.forEach(student => {
+        student.answers.forEach((ans, i) => {
+            if (i < numQuestions) {
+                freq[i][ans] = (freq[i][ans] || 0) + 1;
+            }
+        });
+    });
+
+    // Convert to ratios
+    freq.forEach(qFreq => {
+        Object.keys(qFreq).forEach(ans => {
+            qFreq[ans] /= total;
+        });
+    });
+
+    return freq;
+}
+
+function calculateCheatingMetrics(answers1, answers2, answerKey, answerFreq) {
+    const n = Math.min(answers1.length, answers2.length);
+    let commonWrong = 0, rareMatches = 0, patternMatches = 0, blankMatches = 0, totalBlanks = 0;
+
+    for (let i = 0; i < n; i++) {
+        const a1 = answers1[i], a2 = answers2[i];
+
+        // Pattern similarity
+        if (a1 === a2) patternMatches++;
+
+        // Blank matching
+        if (a1 === '' || a2 === '') {
+            totalBlanks++;
+            if (a1 === '' && a2 === '') blankMatches++;
+        }
+
+        // Common wrong answers
+        if (answerKey && a1 && a2 && a1 === a2) {
+            const qNum = i + 1;
+            const correct = (answerKey[qNum] || answerKey[String(qNum)] || '').toUpperCase();
+            if (correct && a1 !== correct) {
+                commonWrong++;
+            }
+        }
+
+        // Rare answer matching
+        if (a1 && a2 && a1 === a2 && i < answerFreq.length) {
+            const freq = answerFreq[i][a1] || 0;
+            if (freq < 0.15) rareMatches++;
+        }
+    }
+
+    return {
+        commonWrong,
+        rareMatches,
+        patternSimilarity: n > 0 ? patternMatches / n : 0,
+        blankMatchRatio: totalBlanks > 0 ? blankMatches / totalBlanks : 1.0,
+        rareMatchRatio: n > 0 ? rareMatches / n : 0
+    };
+}
+
+function calculateSuspicionScore(metrics, hasAnswerKey) {
+    let score = 0;
+
+    if (hasAnswerKey) {
+        score += Math.min(metrics.commonWrong / 10, 0.4);
+        score += metrics.rareMatchRatio * 0.25;
+        score += Math.max(0, (metrics.patternSimilarity - 0.6)) * 0.5;
+        score += Math.max(0, (metrics.blankMatchRatio - 0.5)) * 0.3;
+    } else {
+        score += metrics.rareMatchRatio * 0.45;
+        score += Math.max(0, (metrics.patternSimilarity - 0.7)) * 0.6;
+        score += Math.max(0, (metrics.blankMatchRatio - 0.5)) * 0.4;
+        score += Math.min(metrics.rareMatches / 8, 0.2);
+    }
+
+    return Math.min(score, 1.0);
 }
 
 function displayScoreResults(data) {

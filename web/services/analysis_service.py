@@ -236,9 +236,17 @@ class AnalysisService:
         session_id: str,
         similarity_threshold: float = 0.85,
         pearson_threshold: float = 0.90,
-        min_common_wrong: int = 3
+        min_common_wrong: int = 5,
+        answer_key: Dict[int, str] = None
     ) -> Dict[str, Any]:
-        """Detect potential cheating by comparing answer patterns"""
+        """Detect potential cheating by comparing answer patterns
+        
+        Uses multiple metrics:
+        1. Common Wrong Answers: Same incorrect answer on same question (needs answer_key)
+        2. Answer Pattern Similarity: Overall pattern match including blanks
+        3. Rare Answer Match: Both giving uncommon answers
+        4. Blank Pattern Match: Both leaving same questions blank
+        """
         import pandas as pd
 
         # Load session results
@@ -275,7 +283,6 @@ class AnalysisService:
                 else:
                     answers.append(ans)
 
-            # Gösterim için: öğrenci no + ad birleştir
             display_id = student_id
             if student_name:
                 display_id = f"{student_id} ({student_name})"
@@ -286,43 +293,55 @@ class AnalysisService:
                 "answers": answers
             })
 
+        # Calculate answer frequencies for rare answer detection
+        answer_freq = self._calculate_answer_frequencies(students, len(question_cols))
+
         # Compare all pairs
         cheating_pairs = []
         total_pairs = len(students) * (len(students) - 1) // 2
 
         for s1, s2 in combinations(students, 2):
-            sim_ratio = self._similarity_ratio(s1["answers"], s2["answers"])
-            pearson = self._pearson_similarity(s1["answers"], s2["answers"])
-            common_wrong = self._count_common_wrong_answers(s1["answers"], s2["answers"])
+            metrics = self._calculate_cheating_metrics(
+                s1["answers"], s2["answers"], 
+                answer_key, answer_freq, question_cols
+            )
 
-            # Check thresholds
+            # Weighted scoring for suspicion
+            suspicion_score = self._calculate_suspicion_score(metrics, answer_key is not None)
+
+            # Check if suspicious
             is_suspicious = (
-                sim_ratio >= similarity_threshold and
-                pearson >= pearson_threshold
-            ) or common_wrong >= min_common_wrong
+                suspicion_score >= 0.7 or  # High overall suspicion
+                (metrics["common_wrong"] >= min_common_wrong and answer_key) or  # Many common wrong answers
+                (metrics["rare_match_ratio"] >= 0.5 and metrics["rare_matches"] >= 3) or  # Many rare answer matches
+                (metrics["pattern_similarity"] >= similarity_threshold and 
+                 metrics["blank_match_ratio"] >= 0.8)  # Very similar pattern with matching blanks
+            )
 
             if is_suspicious:
                 details = []
-                if sim_ratio >= similarity_threshold:
-                    details.append(f"Yüksek benzerlik: %{sim_ratio*100:.1f}")
-                if pearson >= pearson_threshold:
-                    details.append(f"Pearson: {pearson:.3f}")
-                if common_wrong >= min_common_wrong:
-                    details.append(f"Ortak yanlış: {common_wrong}")
+                if answer_key and metrics["common_wrong"] >= 2:
+                    details.append(f"Ortak yanlış: {metrics['common_wrong']}")
+                if metrics["rare_matches"] >= 2:
+                    details.append(f"Nadir cevap eşleşmesi: {metrics['rare_matches']}")
+                if metrics["pattern_similarity"] >= 0.8:
+                    details.append(f"Desen benzerliği: %{metrics['pattern_similarity']*100:.0f}")
+                if metrics["blank_match_ratio"] >= 0.7:
+                    details.append(f"Boş eşleşme: %{metrics['blank_match_ratio']*100:.0f}")
 
                 cheating_pairs.append(CheatingPair(
                     student1_id=s1["student_id"],
                     student1_file=s1["file_name"],
                     student2_id=s2["student_id"],
                     student2_file=s2["file_name"],
-                    similarity_ratio=round(sim_ratio, 4),
-                    pearson_correlation=round(pearson, 4),
-                    common_wrong_answers=common_wrong,
-                    details=" | ".join(details)
+                    similarity_ratio=round(suspicion_score, 4),
+                    pearson_correlation=round(metrics["pattern_similarity"], 4),
+                    common_wrong_answers=metrics["common_wrong"] if answer_key else metrics["rare_matches"],
+                    details=" | ".join(details) if details else "Şüpheli benzerlik"
                 ))
 
-        # Sort by similarity descending
-        cheating_pairs.sort(key=lambda x: (-x.similarity_ratio, -x.pearson_correlation))
+        # Sort by suspicion score descending
+        cheating_pairs.sort(key=lambda x: -x.similarity_ratio)
 
         return {
             "success": True,
@@ -335,8 +354,96 @@ class AnalysisService:
                 "pearson": pearson_threshold,
                 "min_common_wrong": min_common_wrong
             },
+            "has_answer_key": answer_key is not None,
             "results": [asdict(p) for p in cheating_pairs]
         }
+
+    def _calculate_answer_frequencies(self, students: List[Dict], num_questions: int) -> List[Dict[str, float]]:
+        """Calculate how frequently each answer is given for each question"""
+        freq = [{} for _ in range(num_questions)]
+        total = len(students)
+        
+        for student in students:
+            for i, ans in enumerate(student["answers"]):
+                if i < num_questions:
+                    freq[i][ans] = freq[i].get(ans, 0) + 1
+        
+        # Convert to ratios
+        for i in range(num_questions):
+            for ans in freq[i]:
+                freq[i][ans] /= total
+        
+        return freq
+
+    def _calculate_cheating_metrics(
+        self, 
+        answers1: List[str], 
+        answers2: List[str],
+        answer_key: Dict[int, str],
+        answer_freq: List[Dict[str, float]],
+        question_cols: List[str]
+    ) -> Dict[str, Any]:
+        """Calculate multiple metrics for cheating detection"""
+        n = min(len(answers1), len(answers2))
+        
+        common_wrong = 0
+        rare_matches = 0
+        pattern_matches = 0
+        blank_matches = 0
+        total_blanks = 0
+        
+        for i in range(n):
+            a1, a2 = answers1[i], answers2[i]
+            
+            # Pattern similarity (including blanks)
+            if a1 == a2:
+                pattern_matches += 1
+            
+            # Blank matching
+            if a1 == "" or a2 == "":
+                total_blanks += 1
+                if a1 == "" and a2 == "":
+                    blank_matches += 1
+            
+            # Common wrong answers (both gave same WRONG answer)
+            if answer_key and a1 and a2 and a1 == a2:
+                q_num = i + 1
+                correct = answer_key.get(q_num, answer_key.get(str(q_num), "")).upper()
+                if correct and a1 != correct:
+                    common_wrong += 1
+            
+            # Rare answer matching (both gave an uncommon answer)
+            if a1 and a2 and a1 == a2 and i < len(answer_freq):
+                freq = answer_freq[i].get(a1, 0)
+                if freq < 0.15:  # Less than 15% of students gave this answer
+                    rare_matches += 1
+        
+        return {
+            "common_wrong": common_wrong,
+            "rare_matches": rare_matches,
+            "pattern_similarity": pattern_matches / n if n > 0 else 0,
+            "blank_match_ratio": blank_matches / total_blanks if total_blanks > 0 else 1.0,
+            "rare_match_ratio": rare_matches / n if n > 0 else 0
+        }
+
+    def _calculate_suspicion_score(self, metrics: Dict[str, Any], has_answer_key: bool) -> float:
+        """Calculate weighted suspicion score from 0 to 1"""
+        score = 0.0
+        
+        if has_answer_key:
+            # With answer key: common wrong answers are most important
+            score += min(metrics["common_wrong"] / 10, 0.4)  # Up to 40% from common wrong
+            score += metrics["rare_match_ratio"] * 0.25  # Up to 25% from rare matches
+            score += max(0, (metrics["pattern_similarity"] - 0.6)) * 0.5  # 0-20% from pattern
+            score += max(0, (metrics["blank_match_ratio"] - 0.5)) * 0.3  # 0-15% from blank pattern
+        else:
+            # Without answer key: rely on rare answers and patterns
+            score += metrics["rare_match_ratio"] * 0.45  # Up to 45% from rare matches
+            score += max(0, (metrics["pattern_similarity"] - 0.7)) * 0.6  # 0-18% from pattern
+            score += max(0, (metrics["blank_match_ratio"] - 0.5)) * 0.4  # 0-20% from blank pattern
+            score += min(metrics["rare_matches"] / 8, 0.2)  # Up to 20% from absolute rare count
+        
+        return min(score, 1.0)
 
     def _find_question_columns(self, columns: List[str]) -> List[str]:
         """Find question columns (q1, q2, ... or Q1, Q2, ...)"""
@@ -462,57 +569,6 @@ class AnalysisService:
                     return val
         
         return ""
-
-    def _similarity_ratio(self, answers1: List[str], answers2: List[str]) -> float:
-        """Calculate similarity ratio between two answer sets"""
-        if not answers1 or not answers2:
-            return 0.0
-
-        total = max(len(answers1), len(answers2))
-        similar = sum(
-            1 for a1, a2 in zip(answers1, answers2)
-            if a1 == a2 and a1 != ""
-        )
-        return similar / total if total > 0 else 0.0
-
-    def _pearson_similarity(self, answers1: List[str], answers2: List[str]) -> float:
-        """Calculate Pearson correlation between answer patterns"""
-        if HAS_SCIPY:
-            # Convert to numeric (1 for same answer, 0 for different)
-            numeric1 = []
-            numeric2 = []
-            for a1, a2 in zip(answers1, answers2):
-                if a1 and a2:  # Both answered
-                    numeric1.append(ord(a1[0]) if a1 else 0)
-                    numeric2.append(ord(a2[0]) if a2 else 0)
-
-            if len(numeric1) < 2:
-                return 0.0
-
-            try:
-                corr, _ = pearsonr(numeric1, numeric2)
-                return corr if not (corr != corr) else 0.0  # Handle NaN
-            except Exception:
-                return 0.0
-        else:
-            return self._simple_correlation(answers1, answers2)
-
-    def _simple_correlation(self, answers1: List[str], answers2: List[str]) -> float:
-        """Simple correlation fallback when scipy is not available"""
-        if not answers1 or not answers2:
-            return 0.0
-
-        matches = sum(1 for a1, a2 in zip(answers1, answers2) if a1 == a2 and a1)
-        total = min(len(answers1), len(answers2))
-        return matches / total if total > 0 else 0.0
-
-    def _count_common_wrong_answers(self, answers1: List[str], answers2: List[str]) -> int:
-        """Count common wrong answers (same non-empty wrong answers)"""
-        common = 0
-        for a1, a2 in zip(answers1, answers2):
-            if a1 and a2 and a1 == a2:
-                common += 1
-        return common
 
     def _calculate_statistics(self, results: List[StudentResult]) -> Dict[str, Any]:
         """Calculate statistics for score results"""
