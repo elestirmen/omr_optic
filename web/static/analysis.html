@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="tr">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -596,6 +597,7 @@
         }
     </style>
 </head>
+
 <body>
     <nav class="navbar">
         <div class="nav-brand">
@@ -655,7 +657,8 @@
                             <div class="csv-loaded" id="csv-file-loaded">
                                 <div>
                                     <strong id="csv-file-name">dosya.csv</strong>
-                                    <div style="font-size: 0.75rem; color: var(--text-secondary);" id="csv-file-stats"></div>
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary);" id="csv-file-stats">
+                                    </div>
                                 </div>
                                 <button class="btn-sm" id="remove-csv-btn">✕</button>
                             </div>
@@ -724,21 +727,18 @@
                         <div class="mode-content" id="mode-cheating">
                             <div class="threshold-row">
                                 <div class="threshold-item">
-                                    <label>Benzerlik</label>
-                                    <input type="number" id="similarity-threshold" value="0.85" min="0" max="1" step="0.05">
+                                    <label>Harpp-Hogan Eşiği</label>
+                                    <input type="number" id="harpp-hogan-threshold" value="1.0" min="0" step="0.1">
                                 </div>
                                 <div class="threshold-item">
-                                    <label>Pearson</label>
-                                    <input type="number" id="pearson-threshold" value="0.90" min="0" max="1" step="0.05">
-                                </div>
-                                <div class="threshold-item">
-                                    <label>Ortak Yanlış</label>
-                                    <input type="number" id="common-wrong-threshold" value="5" min="1" max="50">
+                                    <label>Min. Ortak Yanlış</label>
+                                    <input type="number" id="min-shared-errors" value="3" min="1" max="50">
                                 </div>
                             </div>
 
                             <p style="margin: 1rem 0 0; font-size: 0.8125rem; color: var(--text-secondary);">
-                                Benzerlik VE Pearson eşiğini aşan veya ortak yanlış sayısı eşiği geçen çiftler şüpheli olarak işaretlenir.
+                                Harpp-Hogan İndeksi > 1.0 olan ve en az belirtilen sayıda ortak yanlışı olan çiftler
+                                şüpheli olarak işaretlenir.
                             </p>
 
                             <div class="action-row">
@@ -764,12 +764,15 @@
                     <div id="results-content" style="display: none;">
                         <div class="stats-row" id="results-stats"></div>
                         <div id="results-list"></div>
-                        
+
                         <!-- Auto Cheating Detection Section -->
-                        <div id="auto-cheating-section" style="display: none; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
-                            <h3 style="font-size: 1rem; margin: 0 0 1rem; display: flex; align-items: center; gap: 0.5rem;">
+                        <div id="auto-cheating-section"
+                            style="display: none; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+                            <h3
+                                style="font-size: 1rem; margin: 0 0 1rem; display: flex; align-items: center; gap: 0.5rem;">
                                 🔍 Otomatik Kopya Tespiti
-                                <span id="auto-cheating-badge" style="padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem;"></span>
+                                <span id="auto-cheating-badge"
+                                    style="padding: 0.25rem 0.75rem; border-radius: 20px; font-size: 0.75rem;"></span>
                             </h3>
                             <div id="auto-cheating-list"></div>
                         </div>
@@ -781,4 +784,5 @@
 
     <script src="js/analysis.js"></script>
 </body>
+
 </html>

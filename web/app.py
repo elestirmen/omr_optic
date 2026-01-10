@@ -445,11 +445,15 @@ def download_scores_excel(session_id):
         )
 
         # Also run cheating detection automatically
+        # Map frontend params or defaults
+        threshold = float(data.get('threshold', 1.0))
+        min_shared_errors = int(data.get('min_shared_errors', 3))
+
         cheating_result = analysis_service.detect_cheating(
             session_id=session_id,
-            similarity_threshold=data.get('similarity_threshold', 0.85),
-            pearson_threshold=data.get('pearson_threshold', 0.90),
-            min_common_wrong=data.get('min_common_wrong', 5)
+            threshold=threshold,
+            min_shared_errors=min_shared_errors,
+            answer_key=data['answer_key']
         )
 
         # Create scores DataFrame
@@ -507,9 +511,9 @@ def download_scores_excel(session_id):
             df_cheating = df_cheating.rename(columns={
                 'student1_id': 'Öğrenci 1',
                 'student2_id': 'Öğrenci 2',
-                'similarity_ratio': 'Benzerlik',
-                'pearson_correlation': 'Pearson',
-                'common_wrong_answers': 'Ortak Cevap',
+                'similarity_ratio': 'Harpp-Hogan',
+                'pearson_correlation': 'Ağırlıklı Skor',
+                'common_wrong_answers': 'Ortak Yanlış',
                 'details': 'Detaylar'
             })
             df_cheating = df_cheating.drop(columns=['student1_file', 'student2_file'], errors='ignore')
@@ -545,11 +549,13 @@ def detect_cheating(session_id):
         answer_key = {int(k): v for k, v in answer_key.items()}
 
     try:
+        threshold = float(data.get('threshold', 1.0))
+        min_shared_errors = int(data.get('min_shared_errors', 3))
+
         result = analysis_service.detect_cheating(
             session_id=session_id,
-            similarity_threshold=data.get('similarity_threshold', 0.85),
-            pearson_threshold=data.get('pearson_threshold', 0.90),
-            min_common_wrong=data.get('min_common_wrong', 5),
+            threshold=threshold,
+            min_shared_errors=min_shared_errors,
             answer_key=answer_key
         )
         return jsonify(result)
@@ -567,20 +573,23 @@ def download_cheating_excel(session_id):
     try:
         import pandas as pd
         
+        threshold = float(data.get('threshold', 1.0))
+        min_shared_errors = int(data.get('min_shared_errors', 3))
+
         result = analysis_service.detect_cheating(
             session_id=session_id,
-            similarity_threshold=data.get('similarity_threshold', 0.85),
-            pearson_threshold=data.get('pearson_threshold', 0.90),
-            min_common_wrong=data.get('min_common_wrong', 3)
+            threshold=threshold,
+            min_shared_errors=min_shared_errors,
+            answer_key=data.get('answer_key')
         )
         
         df = pd.DataFrame(result['results'])
         df = df.rename(columns={
             'student1_id': 'Öğrenci 1',
             'student2_id': 'Öğrenci 2',
-            'similarity_ratio': 'Benzerlik',
-            'pearson_correlation': 'Pearson',
-            'common_wrong_answers': 'Ortak Cevap',
+            'similarity_ratio': 'Harpp-Hogan',
+            'pearson_correlation': 'Ağırlıklı Skor',
+            'common_wrong_answers': 'Ortak Yanlış',
             'details': 'Detaylar'
         })
         

@@ -234,18 +234,21 @@ class AnalysisService:
     def detect_cheating(
         self,
         session_id: str,
-        similarity_threshold: float = 0.85,
-        pearson_threshold: float = 0.90,
-        min_common_wrong: int = 5,
+        threshold: float = 1.0,  # Harpp-Hogan için varsayılan 1.0
+        min_shared_errors: int = 3,  # En az 3 ortak yanlış
         answer_key: Dict[int, str] = None
     ) -> Dict[str, Any]:
-        """Detect potential cheating by comparing answer patterns
+        """Detect potential cheating using Harpp-Hogan Index and Weighted Error Similarity
         
-        Uses multiple metrics:
-        1. Common Wrong Answers: Same incorrect answer on same question (needs answer_key)
-        2. Answer Pattern Similarity: Overall pattern match including blanks
-        3. Rare Answer Match: Both giving uncommon answers
-        4. Blank Pattern Match: Both leaving same questions blank
+        Metrics:
+        1. Harpp-Hogan Index = EEIC / D
+           - EEIC: Exact Errors In Common (Ortak Yanlış Sayısı)
+           - D: Different Responses (Farklı Cevap Sayısı)
+           - Index > 1.0 is historically considered suspicious
+        
+        2. Weighted Error Score (WES)
+           - Weighted sum of shared errors based on rarity
+           - Rare errors weigh more than common errors
         """
         import pandas as pd
 
@@ -293,7 +296,7 @@ class AnalysisService:
                 "answers": answers
             })
 
-        # Calculate answer frequencies for rare answer detection
+        # Calculate answer frequencies for weighted scoring
         answer_freq = self._calculate_answer_frequencies(students, len(question_cols))
 
         # Compare all pairs
@@ -306,41 +309,44 @@ class AnalysisService:
                 answer_key, answer_freq, question_cols
             )
 
-            # Weighted scoring for suspicion
-            suspicion_score = self._calculate_suspicion_score(metrics, answer_key is not None)
+            # Harpp-Hogan Index
+            harpp_hogan = 0.0
+            if metrics["differences"] > 0:
+                harpp_hogan = metrics["eeic"] / metrics["differences"]
+            elif metrics["eeic"] > 0:
+                harpp_hogan = 99.0  # Infinite suspicion if shared errors but no differences
 
             # Check if suspicious
-            is_suspicious = (
-                suspicion_score >= 0.7 or  # High overall suspicion
-                (metrics["common_wrong"] >= min_common_wrong and answer_key) or  # Many common wrong answers
-                (metrics["rare_match_ratio"] >= 0.5 and metrics["rare_matches"] >= 3) or  # Many rare answer matches
-                (metrics["pattern_similarity"] >= similarity_threshold and 
-                 metrics["blank_match_ratio"] >= 0.8)  # Very similar pattern with matching blanks
-            )
+            # Harpp-Hogan > 1.0 OR (High WES and enough shared errors)
+            is_suspicious = False
+            
+            if metrics["eeic"] >= min_shared_errors:
+                if harpp_hogan >= threshold:
+                    is_suspicious = True
+                elif metrics["weighted_score"] > 5.0:  # High weighted score backup
+                    is_suspicious = True
 
             if is_suspicious:
                 details = []
-                if answer_key and metrics["common_wrong"] >= 2:
-                    details.append(f"Ortak yanlış: {metrics['common_wrong']}")
-                if metrics["rare_matches"] >= 2:
-                    details.append(f"Nadir cevap eşleşmesi: {metrics['rare_matches']}")
-                if metrics["pattern_similarity"] >= 0.8:
-                    details.append(f"Desen benzerliği: %{metrics['pattern_similarity']*100:.0f}")
-                if metrics["blank_match_ratio"] >= 0.7:
-                    details.append(f"Boş eşleşme: %{metrics['blank_match_ratio']*100:.0f}")
+                details.append(f"Harpp-Hogan: {harpp_hogan:.2f}")
+                details.append(f"Ortak Yanlış: {metrics['eeic']}")
+                details.append(f"Farklılık: {metrics['differences']}")
+                
+                if metrics["weighted_score"] > 5.0:
+                    details.append(f"Ağırlıklı Skor: {metrics['weighted_score']:.1f}")
 
                 cheating_pairs.append(CheatingPair(
                     student1_id=s1["student_id"],
                     student1_file=s1["file_name"],
                     student2_id=s2["student_id"],
                     student2_file=s2["file_name"],
-                    similarity_ratio=round(suspicion_score, 4),
-                    pearson_correlation=round(metrics["pattern_similarity"], 4),
-                    common_wrong_answers=metrics["common_wrong"] if answer_key else metrics["rare_matches"],
-                    details=" | ".join(details) if details else "Şüpheli benzerlik"
+                    similarity_ratio=harpp_hogan, # Mapped to main score field
+                    pearson_correlation=metrics["weighted_score"], # Using this field for weighted score
+                    common_wrong_answers=metrics["eeic"],
+                    details=" | ".join(details)
                 ))
 
-        # Sort by suspicion score descending
+        # Sort by Harpp-Hogan descending
         cheating_pairs.sort(key=lambda x: -x.similarity_ratio)
 
         return {
@@ -350,9 +356,8 @@ class AnalysisService:
             "total_pairs_checked": total_pairs,
             "suspicious_pairs": len(cheating_pairs),
             "thresholds": {
-                "similarity": similarity_threshold,
-                "pearson": pearson_threshold,
-                "min_common_wrong": min_common_wrong
+                "harpp_hogan": threshold,
+                "min_shared_errors": min_shared_errors
             },
             "has_answer_key": answer_key is not None,
             "results": [asdict(p) for p in cheating_pairs]
@@ -362,10 +367,11 @@ class AnalysisService:
         """Calculate how frequently each answer is given for each question"""
         freq = [{} for _ in range(num_questions)]
         total = len(students)
+        if total == 0: return freq
         
         for student in students:
             for i, ans in enumerate(student["answers"]):
-                if i < num_questions:
+                if i < num_questions and ans:
                     freq[i][ans] = freq[i].get(ans, 0) + 1
         
         # Convert to ratios
@@ -383,67 +389,64 @@ class AnalysisService:
         answer_freq: List[Dict[str, float]],
         question_cols: List[str]
     ) -> Dict[str, Any]:
-        """Calculate multiple metrics for cheating detection"""
+        """Calculate metrics for Harpp-Hogan and Weighted Scoring"""
         n = min(len(answers1), len(answers2))
         
-        common_wrong = 0
-        rare_matches = 0
-        pattern_matches = 0
-        blank_matches = 0
-        total_blanks = 0
+        eeic = 0  # Exact Errors In Common
+        differences = 0
+        weighted_score = 0.0
         
         for i in range(n):
             a1, a2 = answers1[i], answers2[i]
             
-            # Pattern similarity (including blanks)
-            if a1 == a2:
-                pattern_matches += 1
-            
-            # Blank matching
-            if a1 == "" or a2 == "":
-                total_blanks += 1
-                if a1 == "" and a2 == "":
-                    blank_matches += 1
-            
-            # Common wrong answers (both gave same WRONG answer)
-            if answer_key and a1 and a2 and a1 == a2:
-                q_num = i + 1
-                correct = answer_key.get(q_num, answer_key.get(str(q_num), "")).upper()
-                if correct and a1 != correct:
-                    common_wrong += 1
-            
-            # Rare answer matching (both gave an uncommon answer)
-            if a1 and a2 and a1 == a2 and i < len(answer_freq):
-                freq = answer_freq[i].get(a1, 0)
-                if freq < 0.15:  # Less than 15% of students gave this answer
-                    rare_matches += 1
-        
-        return {
-            "common_wrong": common_wrong,
-            "rare_matches": rare_matches,
-            "pattern_similarity": pattern_matches / n if n > 0 else 0,
-            "blank_match_ratio": blank_matches / total_blanks if total_blanks > 0 else 1.0,
-            "rare_match_ratio": rare_matches / n if n > 0 else 0
-        }
+            # Skip if either is empty
+            if not a1 or not a2:
+                continue
 
-    def _calculate_suspicion_score(self, metrics: Dict[str, Any], has_answer_key: bool) -> float:
-        """Calculate weighted suspicion score from 0 to 1"""
-        score = 0.0
-        
-        if has_answer_key:
-            # With answer key: common wrong answers are most important
-            score += min(metrics["common_wrong"] / 10, 0.4)  # Up to 40% from common wrong
-            score += metrics["rare_match_ratio"] * 0.25  # Up to 25% from rare matches
-            score += max(0, (metrics["pattern_similarity"] - 0.6)) * 0.5  # 0-20% from pattern
-            score += max(0, (metrics["blank_match_ratio"] - 0.5)) * 0.3  # 0-15% from blank pattern
-        else:
-            # Without answer key: rely on rare answers and patterns
-            score += metrics["rare_match_ratio"] * 0.45  # Up to 45% from rare matches
-            score += max(0, (metrics["pattern_similarity"] - 0.7)) * 0.6  # 0-18% from pattern
-            score += max(0, (metrics["blank_match_ratio"] - 0.5)) * 0.4  # 0-20% from blank pattern
-            score += min(metrics["rare_matches"] / 8, 0.2)  # Up to 20% from absolute rare count
-        
-        return min(score, 1.0)
+            q_num = i + 1
+            correct = ""
+            if answer_key:
+                # Try int key first, then string
+                correct = answer_key.get(q_num, answer_key.get(str(q_num), "")).upper()
+            
+            # Difference calculation (for Harpp-Hogan Denominator)
+            if a1 != a2:
+                differences += 1
+            
+            # Shared Error calculation (for Harpp-Hogan Numerator)
+            # Only if answer key exists and both answers are the same AND wrong
+            if answer_key and correct:
+                if a1 == a2 and a1 != correct:
+                    eeic += 1
+                    
+                    # Weighted scoring based on rarity
+                    # If an error is rare, it counts more
+                    freq = 1.0
+                    if i < len(answer_freq):
+                        freq = answer_freq[i].get(a1, 0.0)
+                    
+                    # Weight formula: 1 / sqrt(frequency)
+                    # e.g. 5% freq -> 1/0.22 = 4.5 points
+                    # e.g. 50% freq -> 1/0.7 = 1.4 points
+                    if freq > 0:
+                        weighted_score += 1.0 / (freq ** 0.5)
+                    else:
+                        weighted_score += 5.0  # Max weight for unique errors
+            
+            # If no answer key, we can only look at rare matches
+            elif not answer_key:
+                 if a1 == a2:
+                    if i < len(answer_freq):
+                        freq = answer_freq[i].get(a1, 0.0)
+                        if freq < 0.10: # Only count very rare matches as "errors" proxy
+                             eeic += 1
+                             weighted_score += 1.0 / (freq ** 0.5)
+
+        return {
+            "eeic": eeic,
+            "differences": differences,
+            "weighted_score": weighted_score
+        }
 
     def _find_question_columns(self, columns: List[str]) -> List[str]:
         """Find question columns (q1, q2, ... or Q1, Q2, ...)"""

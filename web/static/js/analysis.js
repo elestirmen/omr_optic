@@ -41,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('download-excel-btn').addEventListener('click', downloadResults);
     document.getElementById('save-key-btn').addEventListener('click', saveKey);
     document.getElementById('clear-key-btn').addEventListener('click', clearKey);
-    
+
     document.getElementById('apply-quick-fill-btn').addEventListener('click', () => {
         applyQuickFill();
         updateButtonStates();
@@ -208,11 +208,11 @@ function removeCsvData() {
 async function fetchServerSessions(showLoading = false) {
     const sessionSelect = document.getElementById('session-select');
     const sessionInfo = document.getElementById('session-info');
-    
+
     if (showLoading) {
         sessionSelect.innerHTML = '<option value="">Yükleniyor...</option>';
     }
-    
+
     try {
         const response = await fetch('/api/sessions');
         const data = await response.json();
@@ -236,7 +236,7 @@ async function fetchServerSessions(showLoading = false) {
             sessionInfo.textContent = '⚠️ Oturum yok';
             sessionInfo.style.color = 'var(--accent-warning)';
         }
-        
+
         loadRecentSessions();
     } catch (error) {
         sessionInfo.textContent = '❌ Yüklenemedi';
@@ -362,21 +362,20 @@ async function calculateScores() {
         });
 
         const scoreData = await scoreResponse.json();
-        
+
         // Also run cheating detection automatically with answer key
         const cheatingResponse = await fetch(`/api/analysis/cheating/${currentSessionId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                similarity_threshold: parseFloat(document.getElementById('similarity-threshold').value),
-                pearson_threshold: parseFloat(document.getElementById('pearson-threshold').value),
-                min_common_wrong: parseInt(document.getElementById('common-wrong-threshold').value),
-                answer_key: currentAnswerKey  // Include answer key for better detection
+                threshold: parseFloat(document.getElementById('harpp-hogan-threshold').value),
+                min_shared_errors: parseInt(document.getElementById('min-shared-errors').value),
+                answer_key: currentAnswerKey
             })
         });
-        
+
         const cheatingData = await cheatingResponse.json();
-        
+
         if (scoreData.success) {
             lastScoreResults = scoreData;
             lastCheatingResults = cheatingData;
@@ -476,7 +475,7 @@ function calculateScoresFromCsv() {
 
     lastScoreResults = data;
     displayScoreResults(data);
-    
+
     // Also run auto cheating detection for CSV
     runAutoCheatingFromCsv();
 }
@@ -484,7 +483,8 @@ function calculateScoresFromCsv() {
 function runAutoCheatingFromCsv() {
     if (!csvData) return;
 
-    const minCommonWrong = parseInt(document.getElementById('common-wrong-threshold').value);
+    const threshold = parseFloat(document.getElementById('harpp-hogan-threshold').value);
+    const minSharedErrors = parseInt(document.getElementById('min-shared-errors').value);
     const questionCols = csvData.questionCols;
 
     const students = csvData.rows.map((row, idx) => {
@@ -510,37 +510,48 @@ function runAutoCheatingFromCsv() {
         return { studentId: displayId, answers };
     });
 
-    // Calculate answer frequencies for rare answer detection
-    const answerFreq = calculateAnswerFrequencies(students, questionCols.length);
-
     const cheatingPairs = [];
 
     for (let i = 0; i < students.length; i++) {
         for (let j = i + 1; j < students.length; j++) {
             const s1 = students[i], s2 = students[j];
-            const metrics = calculateCheatingMetrics(s1.answers, s2.answers, currentAnswerKey, answerFreq);
-            const suspicionScore = calculateSuspicionScore(metrics, Object.keys(currentAnswerKey).length > 0);
 
-            const isSuspicious = (
-                suspicionScore >= 0.7 ||
-                (metrics.commonWrong >= minCommonWrong && Object.keys(currentAnswerKey).length > 0) ||
-                (metrics.rareMatchRatio >= 0.5 && metrics.rareMatches >= 3) ||
-                (metrics.patternSimilarity >= 0.85 && metrics.blankMatchRatio >= 0.8)
-            );
+            let eeic = 0;
+            let differences = 0;
 
-            if (isSuspicious) {
-                const details = [];
-                if (metrics.commonWrong >= 2) details.push(`Ortak yanlış: ${metrics.commonWrong}`);
-                if (metrics.rareMatches >= 2) details.push(`Nadir cevap: ${metrics.rareMatches}`);
-                if (metrics.patternSimilarity >= 0.8) details.push(`Desen: %${(metrics.patternSimilarity*100).toFixed(0)}`);
+            const n = Math.min(s1.answers.length, s2.answers.length);
 
+            for (let k = 0; k < n; k++) {
+                const a1 = s1.answers[k];
+                const a2 = s2.answers[k];
+
+                if (!a1 || !a2) continue;
+
+                if (a1 !== a2) {
+                    differences++;
+                } else if (Object.keys(currentAnswerKey).length > 0) {
+                    const qNum = k + 1;
+                    const correct = (currentAnswerKey[qNum] || '').toUpperCase();
+                    if (correct && a1 !== correct) {
+                        eeic++;
+                    }
+                }
+            }
+
+            let harppHogan = 0;
+            if (differences > 0) {
+                harppHogan = eeic / differences;
+            } else if (eeic > 0) {
+                harppHogan = 99.0;
+            }
+
+            if (eeic >= minSharedErrors && harppHogan >= threshold) {
                 cheatingPairs.push({
                     student1_id: s1.studentId,
                     student2_id: s2.studentId,
-                    similarity_ratio: suspicionScore,
-                    pearson_correlation: metrics.patternSimilarity,
-                    common_wrong_answers: metrics.commonWrong || metrics.rareMatches,
-                    details: details.join(' | ')
+                    similarity_ratio: harppHogan,
+                    common_wrong_answers: eeic,
+                    details: `Harpp-Hogan: ${harppHogan.toFixed(2)} | Ortak Yanlış: ${eeic}`
                 });
             }
         }
@@ -560,86 +571,9 @@ function runAutoCheatingFromCsv() {
     displayAutoCheatingResults(cheatingData);
 }
 
-function calculateAnswerFrequencies(students, numQuestions) {
-    const freq = Array.from({ length: numQuestions }, () => ({}));
-    const total = students.length;
-
-    students.forEach(student => {
-        student.answers.forEach((ans, i) => {
-            if (i < numQuestions) {
-                freq[i][ans] = (freq[i][ans] || 0) + 1;
-            }
-        });
-    });
-
-    // Convert to ratios
-    freq.forEach(qFreq => {
-        Object.keys(qFreq).forEach(ans => {
-            qFreq[ans] /= total;
-        });
-    });
-
-    return freq;
-}
-
-function calculateCheatingMetrics(answers1, answers2, answerKey, answerFreq) {
-    const n = Math.min(answers1.length, answers2.length);
-    let commonWrong = 0, rareMatches = 0, patternMatches = 0, blankMatches = 0, totalBlanks = 0;
-
-    for (let i = 0; i < n; i++) {
-        const a1 = answers1[i], a2 = answers2[i];
-
-        // Pattern similarity
-        if (a1 === a2) patternMatches++;
-
-        // Blank matching
-        if (a1 === '' || a2 === '') {
-            totalBlanks++;
-            if (a1 === '' && a2 === '') blankMatches++;
-        }
-
-        // Common wrong answers
-        if (answerKey && a1 && a2 && a1 === a2) {
-            const qNum = i + 1;
-            const correct = (answerKey[qNum] || answerKey[String(qNum)] || '').toUpperCase();
-            if (correct && a1 !== correct) {
-                commonWrong++;
-            }
-        }
-
-        // Rare answer matching
-        if (a1 && a2 && a1 === a2 && i < answerFreq.length) {
-            const freq = answerFreq[i][a1] || 0;
-            if (freq < 0.15) rareMatches++;
-        }
-    }
-
-    return {
-        commonWrong,
-        rareMatches,
-        patternSimilarity: n > 0 ? patternMatches / n : 0,
-        blankMatchRatio: totalBlanks > 0 ? blankMatches / totalBlanks : 1.0,
-        rareMatchRatio: n > 0 ? rareMatches / n : 0
-    };
-}
-
-function calculateSuspicionScore(metrics, hasAnswerKey) {
-    let score = 0;
-
-    if (hasAnswerKey) {
-        score += Math.min(metrics.commonWrong / 10, 0.4);
-        score += metrics.rareMatchRatio * 0.25;
-        score += Math.max(0, (metrics.patternSimilarity - 0.6)) * 0.5;
-        score += Math.max(0, (metrics.blankMatchRatio - 0.5)) * 0.3;
-    } else {
-        score += metrics.rareMatchRatio * 0.45;
-        score += Math.max(0, (metrics.patternSimilarity - 0.7)) * 0.6;
-        score += Math.max(0, (metrics.blankMatchRatio - 0.5)) * 0.4;
-        score += Math.min(metrics.rareMatches / 8, 0.2);
-    }
-
-    return Math.min(score, 1.0);
-}
+// Helper functions calculateAnswerFrequencies, calculateCheatingMetrics, calculateSuspicionScore 
+// are no longer needed for client-side processing, but kept if you want to reuse or can be removed.
+// For cleanliness, I am removing them as they are replaced by the logic above.
 
 function displayScoreResults(data) {
     document.getElementById('results-title').textContent = '📊 Puan Sonuçları';
@@ -689,14 +623,14 @@ function displayAutoCheatingResults(data) {
     const section = document.getElementById('auto-cheating-section');
     const badge = document.getElementById('auto-cheating-badge');
     const list = document.getElementById('auto-cheating-list');
-    
+
     section.style.display = 'block';
-    
+
     if (data.suspicious_pairs > 0) {
         badge.textContent = `${data.suspicious_pairs} şüpheli`;
         badge.style.background = 'rgba(239, 68, 68, 0.2)';
         badge.style.color = 'var(--accent-danger)';
-        
+
         list.innerHTML = data.results.slice(0, 10).map(r => `
             <div class="cheat-item">
                 <div class="cheat-pair">
@@ -705,8 +639,11 @@ function displayAutoCheatingResults(data) {
                     <div class="cheat-student">${r.student2_id}</div>
                 </div>
                 <div class="cheat-metrics">
-                    <span class="cheat-badge ${r.similarity_ratio >= 0.85 ? 'danger' : ''}">Benzerlik: %${(r.similarity_ratio * 100).toFixed(1)}</span>
-                    <span class="cheat-badge">Ortak: ${r.common_wrong_answers}</span>
+                    <span class="cheat-badge ${r.similarity_ratio >= 1.0 ? 'danger' : ''}">HH İndeks: ${r.similarity_ratio.toFixed(2)}</span>
+                    <span class="cheat-badge">Ortak Yanlış: ${r.common_wrong_answers}</span>
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.5rem;">
+                    ${r.details}
                 </div>
             </div>
         `).join('') + (data.results.length > 10 ? `<p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">... ve ${data.results.length - 10} daha</p>` : '');
@@ -733,14 +670,15 @@ async function detectCheating() {
     btn.disabled = true;
     btn.textContent = 'Analiz ediliyor...';
 
+    // detectCheating function updated to use new parameters
     try {
         const response = await fetch(`/api/analysis/cheating/${currentSessionId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                similarity_threshold: parseFloat(document.getElementById('similarity-threshold').value),
-                pearson_threshold: parseFloat(document.getElementById('pearson-threshold').value),
-                min_common_wrong: parseInt(document.getElementById('common-wrong-threshold').value)
+                threshold: parseFloat(document.getElementById('harpp-hogan-threshold').value),
+                min_shared_errors: parseInt(document.getElementById('min-shared-errors').value),
+                answer_key: currentAnswerKey
             })
         });
 
@@ -760,12 +698,12 @@ async function detectCheating() {
 }
 
 function detectCheatingFromCsv() {
+    // CSV logic needs to be updated or routed to backend if possible. 
+    // Implementing simplified Harpp-Hogan client-side for CSV
     if (!csvData) return;
 
-    const simThreshold = parseFloat(document.getElementById('similarity-threshold').value);
-    const pearsonThreshold = parseFloat(document.getElementById('pearson-threshold').value);
-    const minCommonWrong = parseInt(document.getElementById('common-wrong-threshold').value);
-
+    const threshold = parseFloat(document.getElementById('harpp-hogan-threshold').value);
+    const minSharedErrors = parseInt(document.getElementById('min-shared-errors').value);
     const questionCols = csvData.questionCols;
 
     const students = csvData.rows.map((row, idx) => {
@@ -774,6 +712,7 @@ function detectCheatingFromCsv() {
             return (!ans || ans === '*' || ans === '-') ? '' : ans;
         });
 
+        // ... (student ID extraction same as before)
         let studentId = row['Ogrenci_No'] || row['ogrenci_no'] || row['student_id'] || '';
         let studentName = row['ad'] || row['Ad'] || '';
 
@@ -793,25 +732,50 @@ function detectCheatingFromCsv() {
 
     const cheatingPairs = [];
 
+    // Calculate answer frequencies for naive weighted score implementation or just skip weighted for CSV client-side
+    // Let's stick to basic Harpp-Hogan for CSV client-side
+
     for (let i = 0; i < students.length; i++) {
         for (let j = i + 1; j < students.length; j++) {
             const s1 = students[i], s2 = students[j];
 
-            let similar = 0, total = Math.max(s1.answers.length, s2.answers.length);
-            for (let k = 0; k < Math.min(s1.answers.length, s2.answers.length); k++) {
-                if (s1.answers[k] === s2.answers[k] && s1.answers[k] !== '') similar++;
+            let eeic = 0;
+            let differences = 0;
+
+            const n = Math.min(s1.answers.length, s2.answers.length);
+
+            for (let k = 0; k < n; k++) {
+                const a1 = s1.answers[k];
+                const a2 = s2.answers[k];
+
+                if (!a1 || !a2) continue;
+
+                if (a1 !== a2) {
+                    differences++;
+                } else if (Object.keys(currentAnswerKey).length > 0) {
+                    // Check if common error
+                    const qNum = k + 1; // Assuming ordered
+                    const correct = (currentAnswerKey[qNum] || '').toUpperCase();
+                    if (correct && a1 !== correct) {
+                        eeic++;
+                    }
+                }
             }
-            const simRatio = total > 0 ? similar / total : 0;
 
-            const isSuspicious = (simRatio >= simThreshold && simRatio >= pearsonThreshold) || similar >= minCommonWrong;
+            let harppHogan = 0;
+            if (differences > 0) {
+                harppHogan = eeic / differences;
+            } else if (eeic > 0) {
+                harppHogan = 99.0;
+            }
 
-            if (isSuspicious) {
+            if (eeic >= minSharedErrors && harppHogan >= threshold) {
                 cheatingPairs.push({
                     student1_id: s1.studentId,
                     student2_id: s2.studentId,
-                    similarity_ratio: simRatio,
-                    pearson_correlation: simRatio,
-                    common_wrong_answers: similar
+                    similarity_ratio: harppHogan,
+                    common_wrong_answers: eeic,
+                    details: `Harpp-Hogan: ${harppHogan.toFixed(2)} | Ortak Yanlış: ${eeic}`
                 });
             }
         }
@@ -821,8 +785,6 @@ function detectCheatingFromCsv() {
 
     const data = {
         success: true,
-        total_students: students.length,
-        total_pairs_checked: students.length * (students.length - 1) / 2,
         suspicious_pairs: cheatingPairs.length,
         results: cheatingPairs
     };
@@ -830,6 +792,7 @@ function detectCheatingFromCsv() {
     lastCheatingResults = data;
     displayCheatingResults(data);
 }
+
 
 function displayCheatingResults(data) {
     document.getElementById('results-title').textContent = '🔍 Kopya Tespit Sonuçları';
@@ -903,9 +866,8 @@ async function downloadResults() {
                 wrong_points: parseFloat(document.getElementById('wrong-points').value),
                 empty_points: parseFloat(document.getElementById('empty-points').value)
             },
-            similarity_threshold: parseFloat(document.getElementById('similarity-threshold').value),
-            pearson_threshold: parseFloat(document.getElementById('pearson-threshold').value),
-            min_common_wrong: parseInt(document.getElementById('common-wrong-threshold').value)
+            threshold: parseFloat(document.getElementById('harpp-hogan-threshold').value),
+            min_shared_errors: parseInt(document.getElementById('min-shared-errors').value)
         };
 
         const response = await fetch(endpoint, {
@@ -1051,7 +1013,7 @@ async function loadSavedKeys() {
         } else {
             list.innerHTML = '<div style="color: var(--text-secondary); font-size: 0.8125rem;">Kayıtlı anahtar yok</div>';
         }
-    } catch (e) {}
+    } catch (e) { }
 }
 
 async function loadKey(name) {
@@ -1086,5 +1048,5 @@ async function deleteKey(name) {
     try {
         await fetch(`/api/analysis/answer-keys/${name}`, { method: 'DELETE' });
         loadSavedKeys();
-    } catch (e) {}
+    } catch (e) { }
 }
