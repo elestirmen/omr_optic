@@ -52,6 +52,8 @@ OMR (Optik İşaretleme Tanıma) formlarını tarayıcı 🖨️ veya telefon ka
 | 📷 **Tarayıcı Desteği** | TWAIN (Windows) ve SANE (Linux) tarayıcı desteği |
 | 📝 **Şablon Editörü** | Görsel şablon oluşturma aracı |
 | 📊 **Detaylı Raporlama** | CSV, Excel ve görsel çıktılar |
+| 🔢 **Puanlama Sistemi** | Esnek cevap anahtarı ve özelleştirilebilir puanlama |
+| 🔍 **Kopya Tespiti** | Harpp-Hogan indeksi ile otomatik kopya analizi |
 
 ---
 
@@ -382,6 +384,7 @@ Results folder: web/results
 | http://localhost:5000/scanner.html | **Tarayıcı** | Tarayıcıdan doğrudan tarama |
 | http://localhost:5000/templates.html | **Şablonlar** | Şablon yönetimi |
 | http://localhost:5000/template-editor.html | **Şablon Editörü** | Yeni şablon oluşturma |
+| http://localhost:5000/analysis.html | **Sonuç Analizi** | Puanlama, cevap anahtarı ve kopya tespiti |
 
 #### Ortam Değişkenleri
 
@@ -653,6 +656,51 @@ Oluşturulan template.json dosyasının canlı önizlemesi.
 
 ---
 
+#### 6. Sonuç Analizi Sayfası (analysis.html)
+
+Bu sayfa OMR sonuçlarını analiz etmek, puanlamak ve kopya tespiti yapmak için kullanılır.
+
+**Veri Kaynağı Seçimi:**
+
+| Kaynak | Açıklama |
+|--------|----------|
+| **📂 Oturum** | Daha önce işlenmiş bir OMR oturumunu seçin |
+| **📄 CSV** | Harici bir CSV dosyası yükleyin |
+
+**Analiz Modları:**
+
+##### 📝 Puanlama Modu
+
+| Özellik | Açıklama |
+|---------|----------|
+| **Soru Sayısı** | Cevap anahtarındaki soru sayısı (1-200) |
+| **Hızlı Doldurma** | "ABCDEABCDE..." şeklinde cevap dizisi girin |
+| **Cevap Grid'i** | Her soru için A/B/C/D/E seçimi yapın |
+| **Puanlama** | Doğru/Yanlış/Boş puanlarını ayarlayın |
+| **Kayıtlı Anahtarlar** | Cevap anahtarlarını kaydedin ve yükleyin |
+
+**Puanlama Sonuçları:**
+- 📊 İstatistik kartları (Toplam öğrenci, ortalama, en yüksek, en düşük)
+- 📋 Sıralı sonuç listesi (sıra, öğrenci no, puan, doğru/yanlış/boş)
+- 📥 Excel indirme (otomatik kopya tespiti dahil)
+
+##### 🔍 Kopya Tespit Modu
+
+Harpp-Hogan İndeksi kullanarak potansiyel kopya çiftlerini tespit eder.
+
+| Parametre | Varsayılan | Açıklama |
+|-----------|------------|----------|
+| **Harpp-Hogan Eşiği** | 1.0 | Bu değerin üzerindeki çiftler şüpheli |
+| **Min. Ortak Yanlış** | 3 | Minimum aynı yanlış cevap sayısı |
+
+**Kopya Tespit Sonuçları:**
+- 👥 Şüpheli öğrenci çiftleri
+- 📊 Harpp-Hogan İndeksi değeri
+- 🔢 Ortak doğru/yanlış/boş sayıları
+- 📥 Excel raporu indirme
+
+---
+
 #### API Endpoint'leri
 
 Web arayüzü aşağıdaki REST API endpoint'lerini kullanır:
@@ -665,12 +713,24 @@ Web arayüzü aşağıdaki REST API endpoint'lerini kullanır:
 | `/api/process/single` | POST | Tek dosya yükle ve işle |
 | `/api/results/<session_id>` | GET | Sonuçları getir |
 | `/api/results/<session_id>/csv` | GET | CSV indir |
+| `/api/results/<session_id>/excel` | GET | Excel indir |
 | `/api/results/<session_id>/image/<filename>` | GET | İşlenmiş görüntü |
+| `/api/sessions` | GET | Oturum listesi |
 | `/api/templates` | GET | Şablon listesi |
 | `/api/templates/<id>` | GET | Şablon detayları |
 | `/api/templates` | POST | Yeni şablon oluştur |
 | `/api/templates/<id>` | PUT | Şablon güncelle |
+| `/api/analysis/answer-keys` | GET | Kayıtlı cevap anahtarları |
+| `/api/analysis/answer-keys` | POST | Yeni cevap anahtarı kaydet |
+| `/api/analysis/answer-keys/<name>` | GET/DELETE | Cevap anahtarı getir/sil |
+| `/api/analysis/scores/<session_id>` | POST | Puanları hesapla |
+| `/api/analysis/scores/<session_id>/excel` | POST | Puanları Excel olarak indir |
+| `/api/analysis/cheating/<session_id>` | POST | Kopya tespiti yap |
+| `/api/analysis/cheating/<session_id>/excel` | POST | Kopya raporu Excel indir |
 | `/api/scanner/devices` | GET | Tarayıcı listesi |
+| `/api/scanner/refresh` | POST | Tarayıcı listesini yenile |
+| `/api/scanner/diagnostics` | GET | Tarayıcı tanılama bilgisi |
+| `/api/scanner/capabilities` | GET | Tarayıcı özellikleri |
 | `/api/scanner/scan` | POST | Tarama başlat |
 | `/api/scanner/status` | GET | Tarama durumu |
 | `/api/scanner/cancel` | POST | Taramayı iptal et |
@@ -725,15 +785,18 @@ OMRChecker/
 │   │   │   ├── process.js  # İşleme sayfası
 │   │   │   ├── scanner.js  # Tarayıcı kontrolü
 │   │   │   ├── templates.js # Şablon yönetimi
-│   │   │   └── template-editor.js # Şablon editörü
+│   │   │   ├── template-editor.js # Şablon editörü
+│   │   │   └── analysis.js # Sonuç analizi scripti
 │   │   ├── index.html      # Ana sayfa
 │   │   ├── scanner.html    # Tarayıcı sayfası
 │   │   ├── process.html    # İşleme sayfası
 │   │   ├── templates.html  # Şablon listesi
-│   │   └── template-editor.html # Şablon editörü
+│   │   ├── template-editor.html # Şablon editörü
+│   │   └── analysis.html   # Sonuç analizi sayfası
 │   ├── services/           # Servis modülleri
 │   │   ├── omr_service.py  # OMR işleme servisi
-│   │   └── scanner_service.py # Tarayıcı servisi
+│   │   ├── scanner_service.py # Tarayıcı servisi
+│   │   └── analysis_service.py # Analiz/puanlama servisi
 │   ├── uploads/            # Yüklenen dosyalar
 │   └── results/            # İşlem sonuçları
 │
