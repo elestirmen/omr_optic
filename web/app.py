@@ -429,23 +429,32 @@ def calculate_scores(session_id):
 
 @app.route('/api/analysis/score/<session_id>/excel', methods=['POST'])
 def download_scores_excel(session_id):
-    """Download scores as Excel"""
+    """Download scores as Excel with automatic cheating detection"""
     data = request.get_json()
     if not data or 'answer_key' not in data:
         return jsonify({'error': 'answer_key required'}), 400
-    
+
     try:
         import pandas as pd
-        
-        result = analysis_service.calculate_scores(
+
+        # Calculate scores
+        score_result = analysis_service.calculate_scores(
             session_id=session_id,
             answer_key=data['answer_key'],
             scoring=data.get('scoring')
         )
-        
-        df = pd.DataFrame(result['results'])
-        # Rename columns to Turkish
-        df = df.rename(columns={
+
+        # Also run cheating detection automatically
+        cheating_result = analysis_service.detect_cheating(
+            session_id=session_id,
+            similarity_threshold=data.get('similarity_threshold', 0.85),
+            pearson_threshold=data.get('pearson_threshold', 0.90),
+            min_common_wrong=data.get('min_common_wrong', 5)
+        )
+
+        # Create scores DataFrame
+        df_scores = pd.DataFrame(score_result['results'])
+        df_scores = df_scores.rename(columns={
             'student_id': 'Öğrenci No',
             'student_name': 'Ad Soyad',
             'tc_kimlik': 'TC Kimlik',
@@ -456,20 +465,36 @@ def download_scores_excel(session_id):
             'answers': 'Cevaplar',
             'file_name': 'Dosya'
         })
-        
-        # Reorder columns
         cols = ['Öğrenci No', 'Ad Soyad', 'TC Kimlik', 'Doğru', 'Yanlış', 'Boş', 'Puan', 'Cevaplar']
-        df = df[[c for c in cols if c in df.columns]]
-        
+        df_scores = df_scores[[c for c in cols if c in df_scores.columns]]
+
+        # Create cheating DataFrame
+        df_cheating = pd.DataFrame(cheating_result['results'])
+        if not df_cheating.empty:
+            df_cheating = df_cheating.rename(columns={
+                'student1_id': 'Öğrenci 1',
+                'student2_id': 'Öğrenci 2',
+                'similarity_ratio': 'Benzerlik',
+                'pearson_correlation': 'Pearson',
+                'common_wrong_answers': 'Ortak Cevap',
+                'details': 'Detaylar'
+            })
+            df_cheating = df_cheating.drop(columns=['student1_file', 'student2_file'], errors='ignore')
+        else:
+            df_cheating = pd.DataFrame({'Durum': ['Şüpheli kopya tespit edilmedi']})
+
+        # Write to Excel with multiple sheets
         buf = io.BytesIO()
-        df.to_excel(buf, index=False, engine='openpyxl')
+        with pd.ExcelWriter(buf, engine='openpyxl') as writer:
+            df_scores.to_excel(writer, sheet_name='Puanlar', index=False)
+            df_cheating.to_excel(writer, sheet_name='Kopya Tespit', index=False)
         buf.seek(0)
-        
+
         return send_file(
             buf,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             as_attachment=True,
-            download_name=f'puanlar_{session_id[:8]}.xlsx'
+            download_name=f'sonuclar_{session_id[:8]}.xlsx'
         )
     except Exception as e:
         return jsonify({'error': str(e)}), 500

@@ -347,7 +347,8 @@ async function calculateScores() {
     btn.textContent = 'Hesaplanıyor...';
 
     try {
-        const response = await fetch(`/api/analysis/score/${currentSessionId}`, {
+        // Calculate scores
+        const scoreResponse = await fetch(`/api/analysis/score/${currentSessionId}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -360,12 +361,28 @@ async function calculateScores() {
             })
         });
 
-        const data = await response.json();
-        if (data.success) {
-            lastScoreResults = data;
-            displayScoreResults(data);
+        const scoreData = await scoreResponse.json();
+        
+        // Also run cheating detection automatically
+        const cheatingResponse = await fetch(`/api/analysis/cheating/${currentSessionId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                similarity_threshold: parseFloat(document.getElementById('similarity-threshold').value),
+                pearson_threshold: parseFloat(document.getElementById('pearson-threshold').value),
+                min_common_wrong: parseInt(document.getElementById('common-wrong-threshold').value)
+            })
+        });
+        
+        const cheatingData = await cheatingResponse.json();
+        
+        if (scoreData.success) {
+            lastScoreResults = scoreData;
+            lastCheatingResults = cheatingData;
+            displayScoreResults(scoreData);
+            displayAutoCheatingResults(cheatingData);
         } else {
-            alert('Hata: ' + (data.error || 'Bilinmeyen hata'));
+            alert('Hata: ' + (scoreData.error || 'Bilinmeyen hata'));
         }
     } catch (error) {
         alert('Bağlantı hatası: ' + error.message);
@@ -458,6 +475,81 @@ function calculateScoresFromCsv() {
 
     lastScoreResults = data;
     displayScoreResults(data);
+    
+    // Also run auto cheating detection for CSV
+    runAutoCheatingFromCsv();
+}
+
+function runAutoCheatingFromCsv() {
+    if (!csvData) return;
+
+    const simThreshold = parseFloat(document.getElementById('similarity-threshold').value);
+    const pearsonThreshold = parseFloat(document.getElementById('pearson-threshold').value);
+    const minCommonWrong = parseInt(document.getElementById('common-wrong-threshold').value);
+
+    const questionCols = csvData.questionCols;
+
+    const students = csvData.rows.map((row, idx) => {
+        const answers = questionCols.map(qCol => {
+            const ans = (row[qCol] || '').trim().toUpperCase();
+            return (!ans || ans === '*' || ans === '-') ? '' : ans;
+        });
+
+        let studentId = row['Ogrenci_No'] || row['ogrenci_no'] || row['student_id'] || '';
+        let studentName = row['ad'] || row['Ad'] || '';
+
+        if (!studentId) {
+            const fileName = row['file_name'] || row['file_id'] || '';
+            if (fileName) {
+                const clean = fileName.split(/[\/\\]/).pop().replace(/\.[^.]+$/, '');
+                const nums = clean.match(/\d{6,}/);
+                studentId = nums ? nums[0] : clean;
+            }
+        }
+        if (!studentId) studentId = `Satır ${idx + 1}`;
+
+        const displayId = studentName ? `${studentId} (${studentName})` : studentId;
+        return { studentId: displayId, answers };
+    });
+
+    const cheatingPairs = [];
+
+    for (let i = 0; i < students.length; i++) {
+        for (let j = i + 1; j < students.length; j++) {
+            const s1 = students[i], s2 = students[j];
+
+            let similar = 0, total = Math.max(s1.answers.length, s2.answers.length);
+            for (let k = 0; k < Math.min(s1.answers.length, s2.answers.length); k++) {
+                if (s1.answers[k] === s2.answers[k] && s1.answers[k] !== '') similar++;
+            }
+            const simRatio = total > 0 ? similar / total : 0;
+
+            const isSuspicious = (simRatio >= simThreshold && simRatio >= pearsonThreshold) || similar >= minCommonWrong;
+
+            if (isSuspicious) {
+                cheatingPairs.push({
+                    student1_id: s1.studentId,
+                    student2_id: s2.studentId,
+                    similarity_ratio: simRatio,
+                    pearson_correlation: simRatio,
+                    common_wrong_answers: similar
+                });
+            }
+        }
+    }
+
+    cheatingPairs.sort((a, b) => b.similarity_ratio - a.similarity_ratio);
+
+    const cheatingData = {
+        success: true,
+        total_students: students.length,
+        total_pairs_checked: students.length * (students.length - 1) / 2,
+        suspicious_pairs: cheatingPairs.length,
+        results: cheatingPairs
+    };
+
+    lastCheatingResults = cheatingData;
+    displayAutoCheatingResults(cheatingData);
 }
 
 function displayScoreResults(data) {
@@ -502,6 +594,39 @@ function displayScoreResults(data) {
             </div>
         `;
     }).join('');
+}
+
+function displayAutoCheatingResults(data) {
+    const section = document.getElementById('auto-cheating-section');
+    const badge = document.getElementById('auto-cheating-badge');
+    const list = document.getElementById('auto-cheating-list');
+    
+    section.style.display = 'block';
+    
+    if (data.suspicious_pairs > 0) {
+        badge.textContent = `${data.suspicious_pairs} şüpheli`;
+        badge.style.background = 'rgba(239, 68, 68, 0.2)';
+        badge.style.color = 'var(--accent-danger)';
+        
+        list.innerHTML = data.results.slice(0, 10).map(r => `
+            <div class="cheat-item">
+                <div class="cheat-pair">
+                    <div class="cheat-student">${r.student1_id}</div>
+                    <div class="cheat-vs">↔</div>
+                    <div class="cheat-student">${r.student2_id}</div>
+                </div>
+                <div class="cheat-metrics">
+                    <span class="cheat-badge ${r.similarity_ratio >= 0.85 ? 'danger' : ''}">Benzerlik: %${(r.similarity_ratio * 100).toFixed(1)}</span>
+                    <span class="cheat-badge">Ortak: ${r.common_wrong_answers}</span>
+                </div>
+            </div>
+        `).join('') + (data.results.length > 10 ? `<p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 0.5rem;">... ve ${data.results.length - 10} daha</p>` : '');
+    } else {
+        badge.textContent = 'Temiz ✅';
+        badge.style.background = 'rgba(16, 185, 129, 0.2)';
+        badge.style.color = 'var(--accent-success)';
+        list.innerHTML = '<p style="color: var(--accent-success); font-size: 0.875rem;">Şüpheli kopya tespit edilmedi</p>';
+    }
 }
 
 async function detectCheating() {
@@ -670,36 +795,29 @@ function displayCheatingResults(data) {
 }
 
 async function downloadResults() {
+    // CSV mode - download both scores and cheating as combined CSV
     if (dataSource === 'csv' && csvData) {
-        if (currentMode === 'score' && lastScoreResults) {
-            downloadResultsAsCsv(lastScoreResults.results, 'puanlar');
-        } else if (lastCheatingResults) {
-            downloadResultsAsCsv(lastCheatingResults.results, 'kopya_tespit');
-        }
+        downloadCombinedCsv();
         return;
     }
 
     if (!currentSessionId) return;
 
+    // Session mode - always use score endpoint which includes both sheets
     try {
-        const endpoint = currentMode === 'score'
-            ? `/api/analysis/score/${currentSessionId}/excel`
-            : `/api/analysis/cheating/${currentSessionId}/excel`;
+        const endpoint = `/api/analysis/score/${currentSessionId}/excel`;
 
-        const body = currentMode === 'score'
-            ? {
-                answer_key: currentAnswerKey,
-                scoring: {
-                    correct_points: parseFloat(document.getElementById('correct-points').value),
-                    wrong_points: parseFloat(document.getElementById('wrong-points').value),
-                    empty_points: parseFloat(document.getElementById('empty-points').value)
-                }
-            }
-            : {
-                similarity_threshold: parseFloat(document.getElementById('similarity-threshold').value),
-                pearson_threshold: parseFloat(document.getElementById('pearson-threshold').value),
-                min_common_wrong: parseInt(document.getElementById('common-wrong-threshold').value)
-            };
+        const body = {
+            answer_key: currentAnswerKey,
+            scoring: {
+                correct_points: parseFloat(document.getElementById('correct-points').value),
+                wrong_points: parseFloat(document.getElementById('wrong-points').value),
+                empty_points: parseFloat(document.getElementById('empty-points').value)
+            },
+            similarity_threshold: parseFloat(document.getElementById('similarity-threshold').value),
+            pearson_threshold: parseFloat(document.getElementById('pearson-threshold').value),
+            min_common_wrong: parseInt(document.getElementById('common-wrong-threshold').value)
+        };
 
         const response = await fetch(endpoint, {
             method: 'POST',
@@ -712,13 +830,47 @@ async function downloadResults() {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `${currentMode === 'score' ? 'puanlar' : 'kopya_tespit'}_${currentSessionId.substring(0, 8)}.xlsx`;
+            a.download = `sonuclar_${currentSessionId.substring(0, 8)}.xlsx`;
             a.click();
             window.URL.revokeObjectURL(url);
         }
     } catch (error) {
         console.error('Download error:', error);
     }
+}
+
+function downloadCombinedCsv() {
+    if (!lastScoreResults && !lastCheatingResults) return;
+
+    let csv = '\uFEFF'; // BOM for UTF-8
+
+    // Add scores section
+    if (lastScoreResults && lastScoreResults.results.length > 0) {
+        csv += '=== PUANLAR ===\n';
+        csv += 'Öğrenci No;Ad Soyad;TC Kimlik;Doğru;Yanlış;Boş;Puan;Cevaplar\n';
+        lastScoreResults.results.forEach(r => {
+            csv += `${r.student_id};${r.student_name || ''};${r.tc_kimlik || ''};${r.correct_count};${r.wrong_count};${r.empty_count};${r.score.toString().replace('.', ',')};${r.answers || ''}\n`;
+        });
+        csv += '\n';
+    }
+
+    // Add cheating section
+    if (lastCheatingResults && lastCheatingResults.results.length > 0) {
+        csv += '=== KOPYA TESPİT ===\n';
+        csv += 'Öğrenci 1;Öğrenci 2;Benzerlik;Ortak Cevap\n';
+        lastCheatingResults.results.forEach(r => {
+            csv += `${r.student1_id};${r.student2_id};%${(r.similarity_ratio * 100).toFixed(1).replace('.', ',')};${r.common_wrong_answers}\n`;
+        });
+    } else {
+        csv += '=== KOPYA TESPİT ===\n';
+        csv += 'Şüpheli kopya tespit edilmedi\n';
+    }
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = window.URL.createObjectURL(blob);
+    a.download = `sonuclar_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
 }
 
 function downloadResultsAsCsv(results, prefix) {
