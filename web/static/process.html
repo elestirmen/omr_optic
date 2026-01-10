@@ -55,11 +55,13 @@
                         <span class="dropzone-icon">📁</span>
                         <p class="dropzone-text">Dosyaları sürükleyip bırakın</p>
                         <p class="dropzone-hint">veya</p>
-                        <button class="btn btn-outline" onclick="document.getElementById('file-input').click()">
+                        <button class="btn btn-outline"
+                            onclick="event.stopPropagation(); document.getElementById('file-input').click()">
                             Dosya Seç
                         </button>
                         <input type="file" id="file-input" multiple accept="image/*" hidden>
-                        <button class="btn btn-outline" onclick="document.getElementById('folder-input').click()">
+                        <button class="btn btn-outline"
+                            onclick="event.stopPropagation(); document.getElementById('folder-input').click()">
                             Klasör Seç
                         </button>
                         <input type="file" id="folder-input" webkitdirectory directory multiple hidden>

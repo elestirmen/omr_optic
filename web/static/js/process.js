@@ -98,7 +98,11 @@ function setupDropzone() {
         handleFiles(e.dataTransfer.files);
     });
 
-    dropzone.addEventListener('click', () => {
+    dropzone.addEventListener('click', (e) => {
+        // Butonlara veya input'lara tıklandığında dropzone click'i tetikleme
+        if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT') {
+            return;
+        }
         fileInput.click();
     });
 }

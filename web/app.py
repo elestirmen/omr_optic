@@ -468,6 +468,39 @@ def download_scores_excel(session_id):
         cols = ['Öğrenci No', 'Ad Soyad', 'TC Kimlik', 'Doğru', 'Yanlış', 'Boş', 'Puan', 'Cevaplar']
         df_scores = df_scores[[c for c in cols if c in df_scores.columns]]
 
+        # Create score summary sheet (Öğrenci No;Soru1Puan;Soru2Puan;...)
+        # Get per-question scores for each student
+        answer_key = data['answer_key']
+        scoring = data.get('scoring', {})
+        correct_pts = scoring.get('correct_points', 1.0) if scoring else 1.0
+        wrong_pts = scoring.get('wrong_points', 0.0) if scoring else 0.0
+        empty_pts = scoring.get('empty_points', 0.0) if scoring else 0.0
+        
+        score_summary_data = []
+        for result in score_result['results']:
+            student_id = result.get('student_id', '')
+            answers = result.get('answers', '')
+            question_cols = score_result.get('question_columns', [])
+            
+            per_question_scores = []
+            for i, answer in enumerate(answers):
+                q_num = i + 1
+                correct_answer = str(answer_key.get(str(q_num), answer_key.get(q_num, ''))).strip().upper()
+                
+                if answer in ('-', '', ' ', '*'):
+                    per_question_scores.append(empty_pts)
+                elif answer.upper() == correct_answer:
+                    per_question_scores.append(correct_pts)
+                else:
+                    per_question_scores.append(wrong_pts)
+            
+            # Format as: Ogrenci No;puan1;puan2;puan3;...
+            score_str = ';'.join(str(int(s) if s == int(s) else s) for s in per_question_scores)
+            summary_line = f"{student_id};{score_str}"
+            score_summary_data.append({'Özet': summary_line})
+        
+        df_summary = pd.DataFrame(score_summary_data)
+
         # Create cheating DataFrame
         df_cheating = pd.DataFrame(cheating_result['results'])
         if not df_cheating.empty:
@@ -487,6 +520,7 @@ def download_scores_excel(session_id):
         buf = io.BytesIO()
         with pd.ExcelWriter(buf, engine='openpyxl') as writer:
             df_scores.to_excel(writer, sheet_name='Puanlar', index=False)
+            df_summary.to_excel(writer, sheet_name='Puan Özeti', index=False)
             df_cheating.to_excel(writer, sheet_name='Kopya Tespit', index=False)
         buf.seek(0)
 
