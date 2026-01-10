@@ -20,6 +20,7 @@
             <a href="process.html" class="nav-link active">OMR İşleme</a>
             <a href="scanner.html" class="nav-link">Tarayıcı</a>
             <a href="templates.html" class="nav-link">Şablonlar</a>
+            <a href="analysis.html" class="nav-link">Sonuçlar</a>
         </div>
         <div class="nav-status">
             <span class="status-indicator online"></span>
@@ -54,11 +55,11 @@
                         <span class="dropzone-icon">📁</span>
                         <p class="dropzone-text">Dosyaları sürükleyip bırakın</p>
                         <p class="dropzone-hint">veya</p>
-                        <button class="btn btn-outline" id="select-files-btn">
+                        <button class="btn btn-outline" onclick="document.getElementById('file-input').click()">
                             Dosya Seç
                         </button>
                         <input type="file" id="file-input" multiple accept="image/*" hidden>
-                        <button class="btn btn-outline" id="select-folder-btn">
+                        <button class="btn btn-outline" onclick="document.getElementById('folder-input').click()">
                             Klasör Seç
                         </button>
                         <input type="file" id="folder-input" webkitdirectory directory multiple hidden>

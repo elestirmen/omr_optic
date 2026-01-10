@@ -83,7 +83,6 @@ async function loadTemplates() {
 
 // Dropzone setup
 function setupDropzone() {
-    // Sürükle-bırak için
     dropzone.addEventListener('dragover', (e) => {
         e.preventDefault();
         dropzone.classList.add('dragover');
@@ -99,27 +98,9 @@ function setupDropzone() {
         handleFiles(e.dataTransfer.files);
     });
 
-    // Dosya Seç butonu - doğrudan input'a bağla
-    const selectFilesBtn = document.getElementById('select-files-btn');
-    if (selectFilesBtn) {
-        selectFilesBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            fileInput.click();
-        });
-    }
-
-    // Klasör Seç butonu - doğrudan input'a bağla
-    const selectFolderBtn = document.getElementById('select-folder-btn');
-    if (selectFolderBtn) {
-        selectFolderBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            folderInput.click();
-        });
-    }
-
-    // Dropzone'a tıklanınca dosya seçici açılmasın - sadece butonlar kullanılsın
+    dropzone.addEventListener('click', () => {
+        fileInput.click();
+    });
 }
 
 // File input setup

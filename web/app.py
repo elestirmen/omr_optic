@@ -28,6 +28,7 @@ from werkzeug.utils import secure_filename
 
 from services.omr_service import OMRService
 from services.scanner_service import ScannerService
+from services.analysis_service import AnalysisService
 
 # Configuration
 UPLOAD_FOLDER = Path(__file__).parent / 'uploads'
@@ -50,6 +51,7 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 # Initialize services
 omr_service = OMRService(UPLOAD_FOLDER, RESULTS_FOLDER)
 scanner_service = ScannerService(UPLOAD_FOLDER, socketio, omr_service=omr_service)
+analysis_service = AnalysisService(RESULTS_FOLDER)
 
 
 def allowed_file(filename):
@@ -326,6 +328,210 @@ def update_template(template_id):
         return jsonify({'error': 'Template not found'}), 404
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ==================== Session Routes ====================
+
+@app.route('/api/sessions', methods=['GET'])
+def list_sessions():
+    """List all available sessions"""
+    try:
+        sessions = []
+        for folder in RESULTS_FOLDER.iterdir():
+            if folder.is_dir() and not folder.name.startswith('_'):
+                sessions.append({
+                    'id': folder.name,
+                    'modified': datetime.fromtimestamp(folder.stat().st_mtime).isoformat()
+                })
+        sessions.sort(key=lambda x: x['modified'], reverse=True)
+        return jsonify({'sessions': sessions})
+    except Exception as e:
+        return jsonify({'error': str(e), 'sessions': []}), 500
+
+
+# ==================== Analysis Routes ====================
+
+@app.route('/api/analysis/answer-keys', methods=['GET'])
+def list_answer_keys():
+    """List all saved answer keys"""
+    try:
+        keys = analysis_service.list_answer_keys()
+        return jsonify({'keys': keys})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analysis/answer-keys', methods=['POST'])
+def save_answer_key():
+    """Save a new answer key"""
+    data = request.get_json()
+    if not data or 'name' not in data or 'answers' not in data:
+        return jsonify({'error': 'name and answers required'}), 400
+    
+    try:
+        result = analysis_service.save_answer_key(
+            name=data['name'],
+            answers=data['answers'],
+            question_count=data.get('question_count', len(data['answers'])),
+            correct_points=data.get('correct_points', 1.0),
+            wrong_points=data.get('wrong_points', 0.0),
+            empty_points=data.get('empty_points', 0.0)
+        )
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analysis/answer-keys/<name>', methods=['GET'])
+def get_answer_key(name):
+    """Get a specific answer key"""
+    try:
+        key = analysis_service.load_answer_key(name)
+        if key:
+            return jsonify(key)
+        return jsonify({'error': 'Not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analysis/answer-keys/<name>', methods=['DELETE'])
+def delete_answer_key(name):
+    """Delete an answer key"""
+    try:
+        if analysis_service.delete_answer_key(name):
+            return jsonify({'success': True})
+        return jsonify({'error': 'Not found'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analysis/score/<session_id>', methods=['POST'])
+def calculate_scores(session_id):
+    """Calculate scores for a session"""
+    data = request.get_json()
+    if not data or 'answer_key' not in data:
+        return jsonify({'error': 'answer_key required'}), 400
+    
+    try:
+        result = analysis_service.calculate_scores(
+            session_id=session_id,
+            answer_key=data['answer_key'],
+            scoring=data.get('scoring')
+        )
+        return jsonify(result)
+    except FileNotFoundError as e:
+        return jsonify({'error': str(e)}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analysis/score/<session_id>/excel', methods=['POST'])
+def download_scores_excel(session_id):
+    """Download scores as Excel"""
+    data = request.get_json()
+    if not data or 'answer_key' not in data:
+        return jsonify({'error': 'answer_key required'}), 400
+    
+    try:
+        import pandas as pd
+        
+        result = analysis_service.calculate_scores(
+            session_id=session_id,
+            answer_key=data['answer_key'],
+            scoring=data.get('scoring')
+        )
+        
+        df = pd.DataFrame(result['results'])
+        # Rename columns to Turkish
+        df = df.rename(columns={
+            'student_id': 'Öğrenci No',
+            'student_name': 'Ad Soyad',
+            'tc_kimlik': 'TC Kimlik',
+            'correct_count': 'Doğru',
+            'wrong_count': 'Yanlış',
+            'empty_count': 'Boş',
+            'score': 'Puan',
+            'answers': 'Cevaplar',
+            'file_name': 'Dosya'
+        })
+        
+        # Reorder columns
+        cols = ['Öğrenci No', 'Ad Soyad', 'TC Kimlik', 'Doğru', 'Yanlış', 'Boş', 'Puan', 'Cevaplar']
+        df = df[[c for c in cols if c in df.columns]]
+        
+        buf = io.BytesIO()
+        df.to_excel(buf, index=False, engine='openpyxl')
+        buf.seek(0)
+        
+        return send_file(
+            buf,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=f'puanlar_{session_id[:8]}.xlsx'
+        )
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analysis/cheating/<session_id>', methods=['POST'])
+def detect_cheating(session_id):
+    """Detect potential cheating"""
+    data = request.get_json() or {}
+    
+    try:
+        result = analysis_service.detect_cheating(
+            session_id=session_id,
+            similarity_threshold=data.get('similarity_threshold', 0.85),
+            pearson_threshold=data.get('pearson_threshold', 0.90),
+            min_common_wrong=data.get('min_common_wrong', 3)
+        )
+        return jsonify(result)
+    except FileNotFoundError as e:
+        return jsonify({'error': str(e)}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/analysis/cheating/<session_id>/excel', methods=['POST'])
+def download_cheating_excel(session_id):
+    """Download cheating detection results as Excel"""
+    data = request.get_json() or {}
+    
+    try:
+        import pandas as pd
+        
+        result = analysis_service.detect_cheating(
+            session_id=session_id,
+            similarity_threshold=data.get('similarity_threshold', 0.85),
+            pearson_threshold=data.get('pearson_threshold', 0.90),
+            min_common_wrong=data.get('min_common_wrong', 3)
+        )
+        
+        df = pd.DataFrame(result['results'])
+        df = df.rename(columns={
+            'student1_id': 'Öğrenci 1',
+            'student2_id': 'Öğrenci 2',
+            'similarity_ratio': 'Benzerlik',
+            'pearson_correlation': 'Pearson',
+            'common_wrong_answers': 'Ortak Cevap',
+            'details': 'Detaylar'
+        })
+        
+        # Remove file columns
+        df = df.drop(columns=['student1_file', 'student2_file'], errors='ignore')
+        
+        buf = io.BytesIO()
+        df.to_excel(buf, index=False, engine='openpyxl')
+        buf.seek(0)
+        
+        return send_file(
+            buf,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=f'kopya_tespit_{session_id[:8]}.xlsx'
+        )
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
